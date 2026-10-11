@@ -1,22 +1,41 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type ReactNode, type ElementType } from "react";
-import heroMine from "@/assets/hero-mine.jpg";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type ElementType,
+  type FormEvent,
+} from "react";
+import {
+  ArrowRightIcon,
+  BellRingingIcon,
+  CheckIcon,
+  CpuIcon,
+  EnvelopeSimpleIcon,
+  FileTextIcon,
+  LockKeyIcon,
+  MinusIcon,
+  PlusIcon,
+  ShieldCheckIcon,
+  TruckIcon,
+  VideoCameraIcon,
+  XIcon,
+} from "@phosphor-icons/react";
+import { Kinetic, ScrollWorld, type WorldScene } from "@/components/ScrollWorld";
 import logoMark from "@/assets/logo-mark.png";
 import teamMaxi from "@/assets/team-maxi.jpg";
 import teamFelipe from "@/assets/team-felipe.jpg";
 import teamEmiliano from "@/assets/team-emiliano.jpg";
-import heroCam03 from "@/assets/hero-cam03.jpg";
-// @ts-expect-error — Vite trata el mp4 como asset estático (URL con hash)
-import demoVideo from "@/assets/demo-deteccion.mp4";
-import indMining from "@/assets/ind-mining.jpg";
-import indConstruction from "@/assets/ind-construction.jpg";
-import indOilgas from "@/assets/ind-oilgas.jpg";
 
 export const Route = createFileRoute("/")({
   component: OpsiaLanding,
 });
 
-// ---------- Reveal on scroll ----------
+const CONTACT_EMAIL = "opsia.cv@gmail.com";
+const CTA_LABEL = "Agendar demo de 30 minutos";
+
+// ---------- Reveal: fade up pesado al entrar en viewport (IntersectionObserver) ----------
 function Reveal({
   children,
   delay = 0,
@@ -29,45 +48,32 @@ function Reveal({
   className?: string;
 }) {
   const Tag = (as ?? "div") as ElementType;
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [shown, setShown] = useState(false);
+  const ref = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const io = new IntersectionObserver(
-      (entries) => entries.forEach((e) => e.isIntersecting && setShown(true)),
+      (entries) =>
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            el.classList.add("is-in");
+            io.disconnect();
+          }
+        }),
       { threshold: 0.15 },
     );
     io.observe(el);
     return () => io.disconnect();
   }, []);
   return (
-    <Tag
-      ref={ref}
-      className={className}
-      style={{
-        opacity: shown ? 1 : 0,
-        transform: shown ? "translateY(0)" : "translateY(16px)",
-        transition: `opacity .8s ease ${delay}ms, transform .8s ease ${delay}ms`,
-      }}
-    >
+    <Tag ref={ref} className={`reveal ${className}`} style={{ transitionDelay: `${delay}ms` }}>
       {children}
     </Tag>
   );
 }
 
-// ---------- Animated counter ----------
-function Counter({
-  to,
-  suffix = "",
-  prefix = "",
-  decimals = 0,
-}: {
-  to: number;
-  suffix?: string;
-  prefix?: string;
-  decimals?: number;
-}) {
+// ---------- Contador animado ----------
+function Counter({ to }: { to: number }) {
   const ref = useRef<HTMLSpanElement | null>(null);
   const [val, setVal] = useState(0);
   useEffect(() => {
@@ -76,20 +82,15 @@ function Counter({
     let raf = 0;
     const io = new IntersectionObserver(
       (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            const start = performance.now();
-            const dur = 1600;
-            const tick = (t: number) => {
-              const p = Math.min(1, (t - start) / dur);
-              const eased = 1 - Math.pow(1 - p, 3);
-              setVal(to * eased);
-              if (p < 1) raf = requestAnimationFrame(tick);
-            };
-            raf = requestAnimationFrame(tick);
-            io.disconnect();
-          }
-        });
+        if (!entries[0].isIntersecting) return;
+        const start = performance.now();
+        const tick = (t: number) => {
+          const p = Math.min(1, (t - start) / 1600);
+          setVal(Math.round(to * (1 - Math.pow(1 - p, 3))));
+          if (p < 1) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        io.disconnect();
       },
       { threshold: 0.4 },
     );
@@ -99,18 +100,34 @@ function Counter({
       cancelAnimationFrame(raf);
     };
   }, [to]);
+  return <span ref={ref}>{val.toLocaleString("es-AR")}</span>;
+}
+
+function SectionHead({
+  eyebrow,
+  title,
+  muted,
+}: {
+  eyebrow: string;
+  title: ReactNode;
+  muted?: ReactNode;
+}) {
   return (
-    <span ref={ref}>
-      {prefix}
-      {val.toFixed(decimals)}
-      {suffix}
-    </span>
+    <>
+      <Reveal>
+        <p className="text-eyebrow text-amber-signal">{eyebrow}</p>
+      </Reveal>
+      <Reveal delay={100}>
+        <h2 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
+          {title}
+          {muted && <span className="text-white/50"> {muted}</span>}
+        </h2>
+      </Reveal>
+    </>
   );
 }
 
-const CONTACT_EMAIL = "opsia.cv@gmail.com";
-
-// ---------- Contact modal ----------
+// ---------- Modal de contacto ----------
 function ContactModal({
   open,
   onClose,
@@ -121,8 +138,11 @@ function ContactModal({
   intent?: string;
 }) {
   const [sent, setSent] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!open) return;
+    setSent(false);
+    setErrors({});
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
@@ -132,97 +152,121 @@ function ContactModal({
     };
   }, [open, onClose]);
   if (!open) return null;
+
+  const submit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const next: Record<string, string> = {};
+    if (!String(fd.get("name") ?? "").trim()) next.name = "Ingrese su nombre.";
+    if (!String(fd.get("company") ?? "").trim()) next.company = "Ingrese el nombre de su empresa.";
+    if (!fd.get("industry")) next.industry = "Elija un tipo de operación.";
+    const email = String(fd.get("email") ?? "").trim();
+    if (!email) next.email = "Ingrese su email corporativo.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      next.email = "El email no tiene un formato válido.";
+    setErrors(next);
+    if (Object.keys(next).length) return;
+    const subject = `[OPSIA] ${intent === "audit" ? "Auditoría piloto" : "Demo"} · ${fd.get("company")}`;
+    const body =
+      `Nombre: ${fd.get("name")}\n` +
+      `Empresa: ${fd.get("company")}\n` +
+      `Operación: ${fd.get("industry")}\n` +
+      `Email: ${email}\n\n` +
+      `${fd.get("message") ?? ""}`;
+    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setSent(true);
+  };
+
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/80 backdrop-blur-xl sm:items-center"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Formulario de contacto"
+      aria-labelledby="contact-title"
     >
       <div
-        className="w-full max-w-lg bg-paper text-ink sm:mx-4"
+        className="w-full max-w-lg rounded-t-2xl border border-white/10 bg-[#181818] text-white sm:mx-4 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-black/10 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
           <div>
-            <p className="text-eyebrow text-ink/60">Contacto</p>
-            <h3 className="mt-1 text-xl font-medium">
+            <p className="text-eyebrow text-white/50">Contacto</p>
+            <h3 id="contact-title" className="mt-1 text-xl font-semibold">
               {intent === "audit" ? "Solicitar auditoría piloto" : "Agendar una demo"}
             </h3>
           </div>
           <button
             onClick={onClose}
             aria-label="Cerrar"
-            className="grid h-9 w-9 place-items-center text-ink/60 hover:text-ink"
+            className="grid h-10 w-10 place-items-center rounded-full text-white/60 transition-colors duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-[#272727] hover:text-white focus-visible:outline-2 focus-visible:outline-amber-signal"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M6 6l12 12M18 6l-12 12" />
-            </svg>
+            <XIcon size={18} />
           </button>
         </div>
         {sent ? (
           <div className="px-6 py-10 text-center">
-            <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-amber-signal/20 text-ink">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M5 12l5 5L20 7" />
-              </svg>
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-amber-signal/20 text-amber-signal">
+              <CheckIcon size={20} weight="bold" />
             </div>
-            <p className="mt-4 text-lg font-medium">Su correo quedó listo para enviar.</p>
-            <p className="mt-2 text-sm text-ink/60">
-              Se abrió su cliente de correo con el mensaje preparado — solo falta apretar
-              enviar. Si no se abrió, escríbanos a{" "}
-              <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-ink underline">
+            <p className="mt-4 text-lg font-semibold">Su correo quedó listo para enviar.</p>
+            <p className="mt-2 text-sm text-white/60">
+              Se abrió su cliente de correo con el mensaje preparado. Solo falta enviarlo. Si no se
+              abrió, escríbanos a{" "}
+              <a
+                href={`mailto:${CONTACT_EMAIL}`}
+                className="font-medium text-white underline underline-offset-4"
+              >
                 {CONTACT_EMAIL}
               </a>
-              . Respondemos en menos de 24 h hábiles.
+              . Respondemos en menos de 24 horas hábiles.
             </p>
-            <button onClick={onClose} className="btn-ghost-light mt-6">
+            <button onClick={onClose} className="btn-secondary mt-6">
               Cerrar
             </button>
           </div>
         ) : (
-          <form
-            className="grid gap-4 px-6 py-6"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              const subject = `[OPSIA] ${intent === "audit" ? "Auditoría piloto" : "Demo"} — ${fd.get("company")}`;
-              const body =
-                `Nombre: ${fd.get("name")}\n` +
-                `Empresa: ${fd.get("company")}\n` +
-                `Industria: ${fd.get("industry")}\n` +
-                `Email: ${fd.get("email")}\n\n` +
-                `${fd.get("message") ?? ""}`;
-              window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-              setSent(true);
-            }}
-          >
-            <Field label="Nombre" name="name" required />
-            <Field label="Empresa" name="company" required />
+          <form className="grid gap-4 px-6 py-6" onSubmit={submit} noValidate>
+            <Field label="Nombre" name="name" error={errors.name} autoComplete="name" />
+            <Field
+              label="Empresa"
+              name="company"
+              error={errors.company}
+              autoComplete="organization"
+            />
             <div>
-              <label className="text-eyebrow text-ink/60" htmlFor="industry">
-                Industria
+              <label className="text-eyebrow text-white/50" htmlFor="industry">
+                Tipo de operación
               </label>
               <select
                 id="industry"
                 name="industry"
-                required
-                className="mt-2 w-full border border-black/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-ink"
+                aria-invalid={!!errors.industry}
+                aria-describedby={errors.industry ? "industry-error" : undefined}
+                className="mt-2 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-amber-signal"
               >
-                <option value="">Seleccione una industria…</option>
-                <option>Minería</option>
-                <option>Construcción</option>
-                <option>Oil &amp; Gas</option>
-                <option>Puertos y flotas</option>
-                <option>Farmacéutica</option>
-                <option>Manufactura</option>
+                <option value="">Seleccione el tipo de operación</option>
+                <option>Rajo abierto</option>
+                <option>Minería subterránea</option>
+                <option>Planta de procesamiento</option>
+                <option>Contratista minero</option>
                 <option>Otra</option>
               </select>
+              {errors.industry && (
+                <p id="industry-error" className="mt-2 text-xs text-red-400">
+                  {errors.industry}
+                </p>
+              )}
             </div>
-            <Field label="Email corporativo" name="email" type="email" required />
+            <Field
+              label="Email corporativo"
+              name="email"
+              type="email"
+              error={errors.email}
+              autoComplete="email"
+            />
             <div>
-              <label className="text-eyebrow text-ink/60" htmlFor="msg">
+              <label className="text-eyebrow text-white/50" htmlFor="msg">
                 Mensaje
               </label>
               <textarea
@@ -230,20 +274,21 @@ function ContactModal({
                 name="message"
                 rows={4}
                 maxLength={1000}
-                className="mt-2 w-full resize-none border border-black/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-ink"
+                className="mt-2 w-full resize-none rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-signal"
                 placeholder="Cuéntenos sobre su operación, cantidad de cámaras y objetivos."
               />
             </div>
-            <button type="submit" className="btn-amber mt-2 justify-center">
-              Enviar solicitud
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M5 12h14M13 5l7 7-7 7" />
-              </svg>
+            <button type="submit" className="btn-primary mt-2">
+              Preparar solicitud
+              <ArrowRightIcon size={16} weight="bold" />
             </button>
-            <p className="text-xs text-ink/50">
-              Al enviar se abre su cliente de correo con el mensaje listo. También puede
-              escribirnos directo a{" "}
-              <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-ink underline">
+            <p className="text-xs text-white/50">
+              Al enviar se abre su cliente de correo con el mensaje listo. También puede escribirnos
+              a{" "}
+              <a
+                href={`mailto:${CONTACT_EMAIL}`}
+                className="font-medium text-white underline underline-offset-4"
+              >
                 {CONTACT_EMAIL}
               </a>
               . No compartimos su información con terceros.
@@ -254,622 +299,605 @@ function ContactModal({
     </div>
   );
 }
+
 function Field({
   label,
   name,
   type = "text",
-  required,
+  error,
+  autoComplete,
 }: {
   label: string;
   name: string;
   type?: string;
-  required?: boolean;
+  error?: string;
+  autoComplete?: string;
 }) {
   return (
     <div>
-      <label className="text-eyebrow text-ink/60" htmlFor={name}>
+      <label className="text-eyebrow text-white/50" htmlFor={name}>
         {label}
       </label>
       <input
         id={name}
         name={name}
         type={type}
-        required={required}
         maxLength={200}
-        className="mt-2 w-full border border-black/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-ink"
+        autoComplete={autoComplete}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${name}-error` : undefined}
+        className={
+          "mt-2 w-full rounded-lg border bg-black px-3 py-2 text-sm text-white outline-none focus:border-amber-signal " +
+          (error ? "border-red-400" : "border-white/15")
+        }
       />
+      {error && (
+        <p id={`${name}-error`} className="mt-2 text-xs text-red-400">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
 
-// ---------- Navbar ----------
+// ---------- Nav en isla flotante ----------
+const NAV = [
+  { label: "Recorrido", href: "#recorrido" },
+  { label: "Plataforma", href: "#plataforma" },
+  { label: "Cómo funciona", href: "#como-funciona" },
+  { label: "Planes", href: "#planes" },
+  { label: "Preguntas", href: "#faq" },
+];
+
+function useActiveSection() {
+  const [active, setActive] = useState("#recorrido");
+  useEffect(() => {
+    const els = NAV.map((n) => document.querySelector(n.href)).filter(Boolean) as Element[];
+    const io = new IntersectionObserver(
+      (entries) =>
+        entries.forEach((e) => {
+          if (e.isIntersecting) setActive(`#${e.target.id}`);
+        }),
+      { rootMargin: "-45% 0px -50% 0px" },
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+  return active;
+}
+
 function Navbar({ onCta }: { onCta: () => void }) {
   const [open, setOpen] = useState(false);
-  const items = [
-    { label: "Soluciones", href: "#soluciones" },
-    { label: "Plataforma", href: "#plataforma" },
-    { label: "Cómo funciona", href: "#como-funciona" },
-    { label: "Recursos", href: "#recursos" },
-  ];
+  const active = useActiveSection();
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+  }, [open]);
+  const ease = "transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]";
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-ink/95 backdrop-blur-md">
-      <div className="container-opsia flex h-16 items-center justify-between text-white">
-        <a href="#top" className="flex items-center gap-2.5">
-          <img src={logoMark} alt="" width={30} height={23} className="h-[23px] w-auto" />
-          <span className="font-display text-lg font-semibold tracking-[-0.04em]">
+    <header className="fixed inset-x-0 top-0 z-50 px-4">
+      <div className="relative z-10 mx-auto mt-6 flex w-max max-w-full items-center gap-2 rounded-full border border-white/10 bg-black/60 p-1.5 pl-4 backdrop-blur-xl">
+        <a
+          href="#top"
+          className="flex items-center gap-2 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-signal"
+          aria-label="OPSIA, ir al inicio"
+        >
+          <img src={logoMark} alt="" width={24} height={18} className="h-5 w-auto" />
+          <span className="text-base font-semibold tracking-tight text-white">
             OPSIA<span className="text-amber-signal">.</span>
           </span>
         </a>
-        <nav className="hidden items-center gap-8 text-sm text-white/70 md:flex">
-          {items.map((i) => (
-            <a key={i.href} href={i.href} className="transition hover:text-white">
+        <nav className="ml-4 hidden items-center gap-1 md:flex" aria-label="Principal">
+          {NAV.map((i) => (
+            <a
+              key={i.href}
+              href={i.href}
+              aria-current={active === i.href ? "location" : undefined}
+              className={
+                `rounded-full px-3 py-2 text-sm font-medium ${ease} focus-visible:outline-2 focus-visible:outline-amber-signal ` +
+                (active === i.href ? "bg-white/10 text-white" : "text-white/60 hover:text-white")
+              }
+            >
               {i.label}
             </a>
           ))}
         </nav>
-        <div className="flex items-center gap-3">
-          <button onClick={onCta} className="btn-amber hidden md:inline-flex">
-            Agendar demo
-          </button>
-          <button
-            className="grid h-9 w-9 place-items-center border border-white/20 md:hidden"
-            onClick={() => setOpen((v) => !v)}
-            aria-label="Menú"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d={open ? "M6 6l12 12M18 6l-12 12" : "M4 7h16M4 12h16M4 17h16"} />
-            </svg>
-          </button>
-        </div>
+        <button onClick={onCta} className="btn-primary ml-2 hidden text-sm md:inline-flex">
+          Agendar demo
+        </button>
+        <button
+          className="relative ml-6 h-10 w-10 rounded-full focus-visible:outline-2 focus-visible:outline-amber-signal md:hidden"
+          onClick={() => setOpen((v) => !v)}
+          aria-label={open ? "Cerrar menú" : "Abrir menú"}
+          aria-expanded={open}
+          aria-controls="mobile-menu"
+        >
+          <span
+            className={`absolute top-1/2 left-1/2 block h-0.5 w-5 -translate-x-1/2 rounded-full bg-white ${ease} ${open ? "-translate-y-1/2 rotate-45" : "-translate-y-1"}`}
+          />
+          <span
+            className={`absolute top-1/2 left-1/2 block h-0.5 w-5 -translate-x-1/2 rounded-full bg-white ${ease} ${open ? "-translate-y-1/2 -rotate-45" : "translate-y-1"}`}
+          />
+        </button>
       </div>
-      {open && (
-        <div className="border-t border-white/10 bg-black/90 md:hidden">
-          <div className="container-opsia flex flex-col gap-4 py-6 text-white">
-            {items.map((i) => (
-              <a key={i.href} href={i.href} onClick={() => setOpen(false)} className="text-base">
-                {i.label}
-              </a>
-            ))}
-            <button
-              onClick={() => {
-                setOpen(false);
-                onCta();
-              }}
-              className="btn-amber mt-2 justify-center"
+
+      <div
+        id="mobile-menu"
+        className={`fixed inset-0 bg-black/80 backdrop-blur-3xl md:hidden ${ease} ${open ? "visible opacity-100" : "invisible opacity-0"}`}
+      >
+        <nav className="flex h-full flex-col justify-center gap-6 px-8" aria-label="Menú móvil">
+          {NAV.map((i, k) => (
+            <a
+              key={i.href}
+              href={i.href}
+              onClick={() => setOpen(false)}
+              aria-current={active === i.href ? "location" : undefined}
+              className={`text-4xl font-semibold ${ease} ${open ? "translate-y-0 opacity-100" : "translate-y-12 opacity-0"} ${active === i.href ? "text-amber-signal" : "text-white"}`}
+              style={{ transitionDelay: open ? `${100 + k * 50}ms` : "0ms" }}
             >
-              Agendar demo
-            </button>
-          </div>
-        </div>
-      )}
+              {i.label}
+            </a>
+          ))}
+          <button
+            onClick={() => {
+              setOpen(false);
+              onCta();
+            }}
+            className={`btn-primary mt-6 self-start ${ease} ${open ? "translate-y-0 opacity-100" : "translate-y-12 opacity-0"}`}
+            style={{ transitionDelay: open ? `${100 + NAV.length * 50}ms` : "0ms" }}
+          >
+            {CTA_LABEL}
+          </button>
+        </nav>
+      </div>
     </header>
   );
 }
 
-// ---------- Hero ----------
-function Hero({ onCta }: { onCta: () => void }) {
+// ---------- Hero: recorrido scroll world ----------
+const W = "/world";
+
+function SceneCopy({
+  eyebrow,
+  title,
+  body,
+  tags,
+}: {
+  eyebrow: string;
+  title: string;
+  body: string;
+  tags?: string[];
+}) {
   return (
-    <section id="top" className="relative overflow-hidden bg-ink text-white">
-      <div className="absolute inset-0">
-        <img
-          src={heroMine}
-          alt="Vista aérea de mina a rajo abierto al atardecer"
-          className="h-full w-full object-cover opacity-55"
-          width={1920}
-          height={1200}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/40 to-ink" />
-        <div className="scan-line" />
-      </div>
-
-      <div className="container-opsia relative flex min-h-[92vh] flex-col justify-end pb-20 pt-32 md:pb-28 md:pt-40">
-        <Reveal>
-          <div className="mb-6 inline-flex items-center gap-2 border border-white/15 px-3 py-1.5">
-            <span className="pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-amber-signal" />
-            <span className="text-eyebrow text-white/70">Vision AI · Seguridad industrial</span>
-          </div>
-        </Reveal>
-        <Reveal delay={80}>
-          <h1 className="text-display-xl max-w-4xl text-white">
-            Sus cámaras ya ven todo. <span className="text-white/60">Nosotros hacemos que</span>{" "}
-            <span className="text-amber-signal">entiendan</span>.
-          </h1>
-        </Reveal>
-        <Reveal delay={160}>
-          <p className="mt-8 max-w-2xl text-base leading-relaxed text-white/70 md:text-lg">
-            OPSIA convierte las cámaras existentes de su operación en un sistema de monitoreo
-            inteligente: cumplimiento de EPP, detección de maquinaria y alertas de proximidad en
-            tiempo real. Sin hardware nuevo. Sin detener la operación.
-          </p>
-        </Reveal>
-        <Reveal delay={200}>
-          <p className="mt-6 max-w-2xl border-l-2 border-amber-signal pl-4 text-sm text-white/60">
-            Nacidos en la minería — la industria más exigente. Llevamos ese estándar de
-            seguridad a cada operación.
-          </p>
-        </Reveal>
-        <Reveal delay={240}>
-          <div className="mt-10 flex flex-wrap gap-3">
-            <button onClick={onCta} className="btn-amber">
-              Agendar demo
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M5 12h14M13 5l7 7-7 7" />
-              </svg>
-            </button>
-            <a href="#como-funciona" className="btn-ghost-dark">
-              Ver cómo funciona
-            </a>
-          </div>
-        </Reveal>
-
-        <CamCard className="mt-12 md:hidden" />
-      </div>
-
-      <CamCard className="pointer-events-none absolute bottom-16 right-6 z-10 hidden w-[26rem] md:block lg:w-[30rem]" />
-
-      <div className="pointer-events-none absolute bottom-4 left-6 text-[10px] tracking-[0.3em] text-white/40">
-        CAM-07 · RTSP · 25 FPS
-      </div>
-    </section>
-  );
-}
-
-function useClock() {
-  const [t, setT] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setT(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
-}
-
-function CamCard({ className = "" }: { className?: string }) {
-  const time = useClock();
-  return (
-    <div
-      className={`animate-fade-up overflow-hidden rounded-md border border-white/15 bg-black/80 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)] backdrop-blur ${className}`}
-    >
-      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-white">
-        <div className="flex items-center gap-2">
-          <span className="pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
-          <span className="text-[10px] font-medium tracking-[0.2em] text-white/90">
-            VISTA DE OPERADOR — SIMULACIÓN
-          </span>
-        </div>
-        <span className="font-mono text-[10px] tracking-widest text-white/60">{time}</span>
-      </div>
-      <div className="relative">
-        {/* Detecciones REALES: video procesado por el modelo OPSIA frame a frame */}
-        <video
-          src={demoVideo}
-          poster={heroCam03}
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="block h-auto w-full"
-          aria-label="Simulación ilustrativa de la vista de operador del sistema OPSIA"
-        />
-      </div>
-      <p className="border-t border-white/10 px-3 py-1.5 text-[9px] tracking-[0.14em] text-white/45">
-        SIMULACIÓN ILUSTRATIVA DE LA INTERFAZ · DEMO CON DETECCIONES REALES DISPONIBLE EN REUNIÓN
-      </p>
+    <div className="max-w-xl">
+      <p className="sw-fade text-eyebrow text-amber-signal">{eyebrow}</p>
+      <h2 className="mt-3 text-4xl font-semibold tracking-tight text-white md:text-6xl">
+        <Kinetic text={title} />
+      </h2>
+      <p className="sw-fade mt-4 text-base text-white/80 md:text-lg">{body}</p>
+      {tags && (
+        <ul className="sw-fade mt-6 flex flex-wrap gap-2">
+          {tags.map((t) => (
+            <li
+              key={t}
+              className="rounded-full border border-white/20 bg-black/40 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur"
+            >
+              {t}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
-// ---------- Trust bar ----------
-function TrustBar() {
-  const industries = ["Minería", "Construcción", "Oil & Gas"];
-  return (
-    <section className="border-y border-white/10 bg-ink py-10 text-white">
-      <div className="container-opsia flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-        <p className="text-eyebrow text-white/50">Diseñado para las industrias más exigentes</p>
-        <div className="flex flex-wrap gap-x-10 gap-y-4 text-sm text-white/70">
-          {industries.map((i) => (
-            <div key={i} className="flex items-center gap-2 border-l border-white/10 pl-3">
-              <span className="h-1 w-1 rounded-full bg-amber-signal" />
-              <span className="font-display tracking-tight">{i}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
+const ILLUSTRATIVE = "Detecciones ilustrativas sobre imagen de referencia.";
 
-// ---------- Problem ----------
-function Problem() {
-  return (
-    <section className="bg-paper py-24 md:py-32">
-      <div className="container-opsia">
-        <Reveal>
-          <p className="text-eyebrow text-ink/50">El problema</p>
-        </Reveal>
-        <Reveal delay={80}>
-          <h2 className="text-display-lg mt-4 max-w-4xl text-ink">
-            Un supervisor no puede mirar 40 cámaras a la vez.
-            <span className="text-ink/50"> Un accidente ocurre en segundos.</span>
-          </h2>
-        </Reveal>
-        <div className="mt-16 grid gap-10 border-t border-ink/10 pt-12 md:grid-cols-3">
-          {[
-            { n: 60, s: "%", t: "de los incidentes graves involucran EPP ausente o incorrecto.", src: "Referencias OSHA / literatura HSE" },
-            { n: 8, s: "s", t: "es el tiempo medio en que una infracción de proximidad se vuelve incidente.", src: "Estudios de seguridad minera" },
-            { n: 40, s: "+", t: "cámaras por sitio es la norma — y la atención humana sostenida sobre monitores cae a los pocos minutos.", src: "Límite operativo conocido en videovigilancia multi-cámara" },
-          ].map((k, i) => (
-            <Reveal key={k.t} delay={100 + i * 60}>
-              <div>
-                <div className="text-display-lg text-ink">
-                  <Counter to={k.n} />
-                  {k.s}
-                </div>
-                <p className="mt-4 max-w-xs text-ink/70">{k.t}</p>
-                <p className="mt-3 text-xs text-ink/40">Fuente: {k.src}.</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ---------- Platform pillars ----------
-function IconShield() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3">
-      <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z" />
-      <path d="M9 12l2 2 4-4" />
-    </svg>
-  );
-}
-function IconMachine() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3">
-      <path d="M3 17h14l3-4h-5l-2-3H8l-3 4H3z" />
-      <circle cx="7" cy="19" r="2" />
-      <circle cx="16" cy="19" r="2" />
-    </svg>
-  );
-}
-function IconReport() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3">
-      <rect x="4" y="3" width="16" height="18" />
-      <path d="M8 8h8M8 12h8M8 16h5" />
-    </svg>
-  );
-}
-function Platform() {
-  const pillars = [
+function buildScenes(onCta: () => void): WorldScene[] {
+  return [
     {
-      icon: <IconShield />,
-      title: "Cumplimiento de EPP, persona por persona",
-      body: "Detección de casco, chaleco reflectivo, lentes, botas, protección auditiva y uniforme reglamentario. Estado SEGURO / INSEGURO / REVISAR por trabajador.",
-      chips: ["Casco", "Chaleco", "Lentes", "Botas", "Auditiva"],
-    },
-    {
-      icon: <IconMachine />,
-      title: "Maquinaria y proximidad",
-      body: "Reconocimiento de volquetes, excavadoras, cargadores y vehículos livianos. Alertas cuando una persona entra al radio de riesgo de un equipo en movimiento.",
-      chips: ["Volquete", "Excavadora", "Cargador", "Radio de riesgo"],
-    },
-    {
-      icon: <IconReport />,
-      title: "Evidencia y reportes",
-      body: "Cada infracción queda registrada con frame, hora y zona. Reportes de cumplimiento por turno, área o contratista, listos para auditoría.",
-      chips: ["Frame + hora", "Por contratista", "Por turno", "Exportable"],
-    },
-  ];
-  return (
-    <section id="plataforma" className="bg-ink py-24 text-white md:py-32">
-      <div className="container-opsia">
-        <Reveal>
-          <p className="text-eyebrow text-white/50">La plataforma</p>
-        </Reveal>
-        <Reveal delay={80}>
-          <h2 className="text-display-lg mt-4 max-w-3xl text-white">
-            Tres capas de inteligencia sobre las cámaras que ya operan.
-          </h2>
-        </Reveal>
-        <div className="mt-16 grid gap-px bg-white/10 md:grid-cols-3">
-          {pillars.map((p, i) => (
-            <Reveal key={p.title} delay={i * 120} className="bg-ink p-8 md:p-10">
-              <div className="text-amber-signal">{p.icon}</div>
-              <h3 className="mt-8 text-xl font-medium leading-snug">{p.title}</h3>
-              <p className="mt-4 text-sm leading-relaxed text-white/60">{p.body}</p>
-              <div className="mt-6 flex flex-wrap gap-1.5">
-                {p.chips.map((c) => (
-                  <span key={c} className="border border-white/15 px-2 py-1 text-[11px] tracking-wide text-white/70">
-                    {c}
-                  </span>
-                ))}
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ---------- How it works ----------
-function HowItWorks() {
-  const steps = [
-    { n: "01", t: "Conectamos sus cámaras", d: "Integración por RTSP / ONVIF con la infraestructura existente. Sin obra nueva, sin instalar dispositivos adicionales." },
-    { n: "02", t: "La IA analiza cada frame", d: "Modelos entrenados en entornos industriales reales. Procesamiento en el borde o en la nube según su necesidad." },
-    { n: "03", t: "Su equipo recibe alertas y reportes", d: "Dashboard operacional, alertas en el momento y reporte ejecutivo de cumplimiento por área, turno y contratista." },
-  ];
-  return (
-    <section id="como-funciona" className="bg-paper py-24 md:py-32">
-      <div className="container-opsia">
-        <Reveal>
-          <p className="text-eyebrow text-ink/50">Cómo funciona</p>
-        </Reveal>
-        <Reveal delay={80}>
-          <h2 className="text-display-lg mt-4 max-w-3xl text-ink">
-            De la cámara a la alerta, en menos de dos segundos.
-          </h2>
-        </Reveal>
-
-        <div className="relative mt-16">
-          <div className="pointer-events-none absolute left-0 right-0 top-8 hidden h-px bg-gradient-to-r from-transparent via-ink/20 to-transparent md:block" />
-          <div className="grid gap-12 md:grid-cols-3 md:gap-8">
-            {steps.map((s, i) => (
-              <Reveal key={s.n} delay={i * 120}>
-                <div className="relative">
-                  <div className="relative z-10 grid h-16 w-16 place-items-center border border-ink/20 bg-paper font-display text-lg text-ink">
-                    {s.n}
-                    <span className="absolute -bottom-1 -right-1 h-2 w-2 bg-amber-signal" />
-                  </div>
-                  <h3 className="mt-6 text-xl font-medium text-ink">{s.t}</h3>
-                  <p className="mt-3 max-w-sm text-sm leading-relaxed text-ink/70">{s.d}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-
-        <Reveal delay={200}>
-          <p className="mt-14 max-w-2xl border-l-2 border-amber-signal pl-4 text-sm text-ink/70">
-            <span className="font-medium text-ink">Privacidad por diseño.</span> Sus videos nunca salen de su
-            infraestructura si así lo requiere. Cumplimiento normativo y protección de datos de los trabajadores desde el primer frame.
+      id: "rajo",
+      label: "Rajo",
+      img: `${W}/01-rajo.webp`,
+      imgSm: `${W}/01-rajo-sm.webp`,
+      iw: 1920,
+      ih: 1200,
+      focus: [0.5, 0.55],
+      to: [0.56, 0.8],
+      zoom: 1.45,
+      weight: 1.3,
+      detections: [
+        { x: 26.5, y: 83.5, w: 6.5, h: 10.5, label: "Vehículo · ruta 2", tone: "info" },
+        { x: 73.5, y: 47.5, w: 4, h: 5, label: "Vehículo", tone: "info" },
+      ],
+      copy: (
+        <div className="max-w-[680px]">
+          <p className="sw-fade inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/40 px-3 py-1 backdrop-blur">
+            <span className="pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-amber-signal" />
+            <span className="text-eyebrow text-white/80">Seguridad minera con IA</span>
           </p>
-        </Reveal>
+          <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl md:text-6xl">
+            <span className="kw">
+              <span className="text-hero" style={{ ["--d" as string]: "150ms" }}>
+                Sus cámaras ya ven todo.
+              </span>
+            </span>
+            <br />
+            <span className="kw">
+              <span className="text-hero" style={{ ["--d" as string]: "320ms" }}>
+                Nosotros hacemos que entiendan.
+              </span>
+            </span>
+          </h1>
+          <p className="sw-fade mt-6 max-w-[680px] text-base text-white/80 md:text-lg">
+            OPSIA convierte el CCTV de su faena en un supervisor que no se distrae. EPP, maquinaria
+            pesada y proximidad, con alertas en menos de 2 segundos. Sin hardware nuevo, sin detener
+            la operación.
+          </p>
+          <div className="sw-fade mt-8">
+            <button onClick={onCta} className="btn-primary">
+              {CTA_LABEL}
+              <ArrowRightIcon size={16} weight="bold" />
+            </button>
+          </div>
+          <p className="sw-fade mt-6 text-sm text-white/60">
+            Modelos propios entrenados con más de 48.000 anotaciones de faenas e instalaciones
+            industriales reales.
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: "deteccion",
+      label: "Vista de operador",
+      img: `${W}/02-deteccion.webp`,
+      iw: 960,
+      ih: 540,
+      video: `${W}/02-deteccion.mp4`,
+      focus: [0.55, 0.5],
+      zoom: 1.12,
+      weight: 1.5,
+      caption:
+        "Video de referencia procesado por el modelo OPSIA. La demo sobre su propia operación se muestra en reunión.",
+      copy: (
+        <SceneCopy
+          eyebrow="Vista de operador"
+          title="Cada persona, cada vehículo, evaluado."
+          body="Personas, chalecos, camionetas, excavadoras y conos, reconocidos frame a frame. Cada trabajador queda como seguro, inseguro o a revisar, con evidencia de frame y hora."
+          tags={["Persona", "Chaleco", "Camioneta", "Excavadora"]}
+        />
+      ),
+    },
+    {
+      id: "epp",
+      label: "EPP en faena",
+      img: `${W}/03-mineria.webp`,
+      imgSm: `${W}/03-mineria-sm.webp`,
+      iw: 1200,
+      ih: 900,
+      focus: [0.55, 0.45],
+      to: [0.4, 0.3],
+      zoom: 1.3,
+      caption: ILLUSTRATIVE,
+      detections: [
+        { x: 20, y: 15, w: 27.5, h: 20.5, label: "Casco ✓", tone: "ok" },
+        { x: 4, y: 55, w: 45, h: 44, label: "Chaleco ✓", tone: "ok" },
+        { x: 49, y: 30, w: 27, h: 47, label: "Maquinaria en movimiento", tone: "warn" },
+      ],
+      copy: (
+        <SceneCopy
+          eyebrow="EPP en faena"
+          title="Nacimos en la minería. Ahí el estándar es más alto."
+          body="Casco, chaleco reflectivo, lentes, botas y protección auditiva, en rajo, planta y talleres. Persona por persona, turno por turno."
+          tags={["Rajo", "Planta", "Talleres", "Por contratista"]}
+        />
+      ),
+    },
+    {
+      id: "proximidad",
+      label: "Proximidad",
+      img: `${W}/06-equipo.webp`,
+      imgSm: `${W}/06-equipo-sm.webp`,
+      iw: 1280,
+      ih: 896,
+      focus: [0.5, 0.35],
+      to: [0.5, 0.45],
+      zoom: 1.2,
+      caption: ILLUSTRATIVE,
+      detections: [
+        { x: 35, y: 2, w: 30, h: 70, label: "Volquete · radio de riesgo", tone: "warn" },
+        { x: 2.5, y: 4, w: 33, h: 95, label: "Persona · EPP ✓", tone: "ok" },
+        { x: 66, y: 13, w: 32.5, h: 86, label: "Persona · EPP ✓", tone: "ok" },
+      ],
+      copy: (
+        <SceneCopy
+          eyebrow="Maquinaria y proximidad"
+          title="Un volquete no ve lo que tiene al lado. OPSIA sí."
+          body="Volquetes, excavadoras, cargadores y camionetas. Alerta en el momento en que una persona entra al radio de riesgo de un equipo en movimiento, y control de acceso a zonas restringidas."
+          tags={["Volquete", "Excavadora", "Cargador", "Accesos"]}
+        />
+      ),
+    },
+    {
+      id: "cierre",
+      label: "Empezar",
+      img: `${W}/01-rajo.webp`,
+      imgSm: `${W}/01-rajo-sm.webp`,
+      iw: 1920,
+      ih: 1200,
+      focus: [0.5, 0.35],
+      to: [0.5, 0.25],
+      zoom: 1.1,
+      weight: 1.3,
+      copy: (
+        <div className="max-w-xl">
+          <p className="sw-fade text-eyebrow text-amber-signal">Su faena</p>
+          <h2 className="mt-3 text-4xl font-semibold tracking-tight text-white md:text-6xl">
+            <Kinetic text="Que cada turno termine como empezó." />
+          </h2>
+          <p className="sw-fade mt-4 text-base text-white/80 md:text-lg">
+            Empiece con una auditoría piloto sobre video grabado de su propia faena. Reporte en 72
+            horas, sin integración y sin hardware nuevo.
+          </p>
+          <div className="sw-fade mt-8">
+            <button onClick={onCta} className="btn-primary">
+              {CTA_LABEL}
+              <ArrowRightIcon size={16} weight="bold" />
+            </button>
+          </div>
+        </div>
+      ),
+    },
+  ];
+}
+
+function Hero({ onCta }: { onCta: () => void }) {
+  const [scenes] = useState(() => buildScenes(onCta));
+  return (
+    <div id="recorrido">
+      <div id="top" />
+      <ScrollWorld scenes={scenes} />
+    </div>
+  );
+}
+
+// ---------- Prueba: métricas verificables ----------
+function Proof() {
+  const metrics = [
+    { pre: "<", v: 2, suf: " s", label: "de la cámara a la alerta" },
+    { pre: "", v: 26, suf: "", label: "clases detectadas entre EPP, personas y maquinaria" },
+    {
+      pre: "+",
+      v: 48000,
+      suf: "",
+      label: "anotaciones de faenas e instalaciones industriales reales",
+    },
+    { pre: "", v: 0, suf: "", label: "equipos nuevos para instalar" },
+  ];
+  return (
+    <section className="bg-[#181818] py-16" aria-label="OPSIA en números">
+      <div className="container-opsia grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        {metrics.map((m, i) => (
+          <Reveal key={m.label} delay={i * 100}>
+            <p className="text-5xl font-semibold tracking-tight text-white tabular-nums">
+              {m.pre}
+              <Counter to={m.v} />
+              {m.suf}
+            </p>
+            <p className="mt-3 max-w-[220px] text-sm text-white/60">{m.label}</p>
+          </Reveal>
+        ))}
       </div>
     </section>
   );
 }
 
-// ---------- Industry solutions ----------
-const INDUSTRIES = [
-  {
-    key: "mineria", name: "Minería", img: indMining,
-    bullets: [
-      "EPP en rajo y planta",
-      "Proximidad persona–maquinaria pesada",
-      "Control de acceso vehicular a zonas restringidas",
-      "Monitoreo de polvo y condiciones de vía",
-    ],
-  },
-  {
-    key: "construccion", name: "Construcción", img: indConstruction,
-    bullets: [
-      "Casco, arnés y chaleco en trabajo en altura",
-      "Zonas de exclusión de grúas",
-      "Conteo de personal en obra",
-      "Ingreso de vehículos no autorizados",
-    ],
-  },
-  {
-    key: "oilgas", name: "Oil & Gas", img: indOilgas,
-    bullets: [
-      "EPP en zonas clasificadas",
-      "Detección de fugas y humo",
-      "Permisos de trabajo en áreas calientes",
-      "Vigilancia de perímetro de instalaciones",
-    ],
-  },
-];
-
-function Solutions({ onCta }: { onCta: () => void }) {
-  const [active, setActive] = useState(INDUSTRIES[0].key);
-  const current = INDUSTRIES.find((i) => i.key === active)!;
+// ---------- Problema ----------
+function Problem() {
+  const stats = [
+    {
+      n: 60,
+      s: "%",
+      t: "de los incidentes graves involucran EPP ausente o incorrecto.",
+      src: "Referencias OSHA y literatura HSE",
+    },
+    {
+      n: 8,
+      s: " s",
+      t: "es el tiempo medio en que una infracción de proximidad se vuelve incidente.",
+      src: "Estudios de seguridad minera",
+    },
+    {
+      n: 40,
+      s: "+",
+      t: "cámaras por faena es la norma, y la atención humana sobre monitores cae a los pocos minutos.",
+      src: "Límite operativo conocido en videovigilancia",
+    },
+  ];
   return (
-    <section id="soluciones" className="bg-ink py-24 text-white md:py-32">
+    <section className="bg-black py-24">
       <div className="container-opsia">
-        <Reveal>
-          <p className="text-eyebrow text-white/50">Soluciones por industria</p>
-        </Reveal>
-        <Reveal delay={80}>
-          <h2 className="text-display-lg mt-4 max-w-4xl text-white">
-            Un mismo motor. <span className="text-white/50">Reglas específicas para cada operación.</span>
-          </h2>
-        </Reveal>
-
-        <div className="mt-14 flex flex-wrap gap-2 border-b border-white/10 pb-4">
-          {INDUSTRIES.map((i) => (
-            <button
-              key={i.key}
-              onClick={() => setActive(i.key)}
-              className={
-                "px-4 py-2 text-sm transition " +
-                (active === i.key
-                  ? "bg-amber-signal text-ink"
-                  : "border border-white/15 text-white/70 hover:border-white/40 hover:text-white")
-              }
+        <SectionHead
+          eyebrow="El problema"
+          title="Un accidente ocurre en segundos."
+          muted="La supervisión humana no escala."
+        />
+        <div className="mt-16 grid gap-6 md:grid-cols-3">
+          {stats.map((k, i) => (
+            <Reveal
+              key={k.t}
+              delay={100 + i * 100}
+              className="rounded-2xl border border-white/10 bg-[#181818] p-8"
             >
-              {i.name}
-            </button>
+              <p className="text-6xl font-semibold tracking-tight text-white tabular-nums">
+                <Counter to={k.n} />
+                {k.s}
+              </p>
+              <p className="mt-4 text-white/70">{k.t}</p>
+              <p className="mt-4 text-xs text-white/40">Fuente: {k.src}.</p>
+            </Reveal>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
 
-        <div key={current.key} className="animate-fade-up mt-12 grid gap-10 md:grid-cols-2 md:gap-16">
-          <div className="relative overflow-hidden">
-            <img
-              src={current.img}
-              alt={`Operación ${current.name} — monitoreo por visión artificial`}
-              className="h-full max-h-[520px] w-full object-cover"
-              loading="lazy"
-              width={1200}
-              height={900}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/20 to-transparent" />
-            <div className="absolute left-4 top-4 flex items-center gap-2 text-[10px] tracking-[0.3em] text-white/70">
-              <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-amber-signal" />
-              LIVE · {current.name.toUpperCase()}
-            </div>
-            <div className="absolute bottom-4 right-4 text-[10px] tracking-[0.3em] text-white/50">
-              CAM-{current.key.slice(0, 3).toUpperCase()}-04
-            </div>
-          </div>
-          <div className="flex flex-col justify-center">
-            <h3 className="text-2xl font-medium md:text-3xl">{current.name}</h3>
-            <ul className="mt-6 space-y-4">
-              {current.bullets.map((b) => (
-                <li key={b} className="flex gap-3 border-b border-white/10 pb-4 text-sm text-white/80">
-                  <span className="mt-2 h-1.5 w-1.5 shrink-0 bg-amber-signal" />
-                  <span>{b}</span>
-                </li>
+// ---------- Tagline: palabra por palabra (landing-page-design B11) ----------
+function TaglineReveal() {
+  const lines = [
+    "Un supervisor no puede mirar",
+    "cuarenta cámaras a la vez.",
+    "OPSIA sí, y no se distrae.",
+  ];
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const words = Array.from(root.querySelectorAll<HTMLElement>(".tag-word"));
+    const io = new IntersectionObserver(
+      (entries) =>
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("is-on");
+            io.unobserve(e.target);
+          }
+        }),
+      // la línea de disparo está al 62% del alto de la pantalla
+      { rootMargin: "0px 0px -38% 0px", threshold: 1 },
+    );
+    words.forEach((w) => io.observe(w));
+    return () => io.disconnect();
+  }, []);
+  return (
+    <section className="bg-black py-24" aria-label="Nuestra propuesta">
+      <div ref={ref} className="container-opsia">
+        <p className="mx-auto max-w-[680px] text-4xl font-semibold tracking-tight md:text-6xl">
+          {lines.map((l, li) => (
+            <span key={li} className="block">
+              {l.split(" ").map((w, wi) => (
+                <span key={wi} className="tag-word">
+                  {w}{" "}
+                </span>
               ))}
-            </ul>
-            <button onClick={onCta} className="btn-ghost-dark mt-8 self-start">
-              Ver solución
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M5 12h14M13 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <p className="mt-12 border-t border-white/10 pt-6 text-sm text-white/50">
-          ¿Opera en otra industria pesada? El motor de detección es el mismo — las reglas se
-          adaptan a su operación.{" "}
-          <button onClick={onCta} className="text-amber-signal underline-offset-4 hover:underline">
-            Conversemos
-          </button>
-          .
+            </span>
+          ))}
         </p>
       </div>
     </section>
   );
 }
 
-// ---------- Team ----------
-function Team() {
-  const founders: {
-    name: string;
-    role: string;
-    base: string;
-    initials: string;
-    photo?: string;
-  }[] = [
+// ---------- Beneficios / plataforma ----------
+function Platform() {
+  const pillars = [
     {
-      name: "Maximiliano Lombardia",
-      role: "Co-fundador · Ingeniería & Producto",
-      base: "Buenos Aires",
-      initials: "ML",
-      photo: teamMaxi,
+      icon: ShieldCheckIcon,
+      title: "Cumplimiento de EPP, persona por persona",
+      body: "Casco, chaleco reflectivo, lentes, botas, protección auditiva y uniforme reglamentario. Estado por trabajador, no por cámara.",
+      chips: ["Casco", "Chaleco", "Lentes", "Botas", "Auditiva"],
     },
     {
-      name: "Felipe Bridge",
-      role: "Co-fundador · Operaciones & Comercial",
-      base: "San Juan",
-      initials: "FB",
-      photo: teamFelipe,
+      icon: TruckIcon,
+      title: "Maquinaria y proximidad",
+      body: "Volquetes, excavadoras, cargadores y vehículos livianos. Alerta cuando una persona entra al radio de riesgo de un equipo en movimiento.",
+      chips: ["Volquete", "Excavadora", "Cargador", "Radio de riesgo"],
     },
     {
-      name: "Emiliano Lescuras",
-      role: "Co-fundador · Machine Learning & Datos",
-      base: "San Juan",
-      initials: "EL",
-      photo: teamEmiliano,
+      icon: FileTextIcon,
+      title: "Evidencia lista para auditoría",
+      body: "Cada infracción queda registrada con frame, hora y zona. Reportes por turno, área o contratista, exportables.",
+      chips: ["Frame y hora", "Por contratista", "Por turno", "Exportable"],
     },
   ];
   return (
-    <section className="bg-ink py-24 text-white md:py-32">
+    <section id="plataforma" className="bg-black py-24">
       <div className="container-opsia">
-        <Reveal>
-          <p className="text-eyebrow text-white/50">Quiénes somos</p>
-        </Reveal>
-        <Reveal delay={80}>
-          <h2 className="text-display-lg mt-4 max-w-3xl text-white">
-            Un equipo de IA con los pies en la tierra minera.
-          </h2>
-        </Reveal>
-        <Reveal delay={140}>
-          <p className="mt-6 max-w-2xl text-white/60">
-            OPSIA nace en San Juan — corazón de la minería argentina — con formación en
-            inteligencia artificial y ciencia de datos, y una convicción: la seguridad de un
-            operario no puede depender de cuántos monitores alcanza a mirar un supervisor.
-          </p>
-        </Reveal>
-        <div className="mt-14 grid gap-px bg-white/10 md:grid-cols-3">
-          {founders.map((f, i) => (
-            <Reveal key={f.name} delay={i * 100} className="bg-ink p-8">
-              {f.photo ? (
-                <img
-                  src={f.photo}
-                  alt={`Retrato de ${f.name}`}
-                  width={800}
-                  height={800}
-                  loading="lazy"
-                  className="aspect-square w-full max-w-[220px] border border-white/10 object-cover"
-                />
-              ) : (
-                <div className="grid aspect-square w-full max-w-[220px] place-items-center border border-amber-signal/40 bg-white/[0.03] font-display text-4xl text-amber-signal">
-                  {f.initials}
-                </div>
-              )}
-              <h3 className="mt-6 text-lg font-medium">{f.name}</h3>
-              <p className="mt-1 text-sm text-white/60">{f.role}</p>
-              <p className="mt-3 text-xs tracking-[0.2em] text-white/40">{f.base.toUpperCase()}</p>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ---------- Impact metrics ----------
-function Impact() {
-  const metrics = [
-    { v: 2, s: " s", label: "de cámara a alerta", prefix: "<" },
-    { v: 26, s: "", label: "clases detectadas: EPP, personas y maquinaria pesada", prefix: "" },
-    { v: 24, s: "/7", label: "sin fatiga de supervisión", prefix: "" },
-    { v: 0, s: "", label: "hardware nuevo requerido", prefix: "" },
-  ];
-  return (
-    <section className="bg-ink py-24 text-white md:py-32">
-      <div className="container-opsia">
-        <Reveal>
-          <p className="text-eyebrow text-white/50">Impacto</p>
-        </Reveal>
-        <Reveal delay={80}>
-          <h2 className="text-display-lg mt-4 max-w-3xl text-white">
-            Números que sostienen conversaciones con dirección de operaciones.
-          </h2>
-        </Reveal>
-        <div className="mt-16 grid gap-px bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
-          {metrics.map((m, i) => (
-            <Reveal key={m.label} delay={i * 100} className="bg-ink px-6 py-10">
-              <div className="font-display text-5xl font-medium tracking-tight text-white md:text-6xl">
-                {m.prefix}
-                <Counter to={m.v} />
-                {m.s}
+        <SectionHead
+          eyebrow="La plataforma"
+          title="Tres capas de inteligencia sobre las cámaras que ya operan."
+        />
+        <div className="mt-16 grid gap-6 md:grid-cols-3">
+          {pillars.map((p, i) => (
+            <Reveal
+              key={p.title}
+              delay={i * 120}
+              className="flex flex-col rounded-2xl border border-white/10 bg-[#181818] p-8"
+            >
+              <div className="grid h-12 w-12 place-items-center rounded-xl bg-[#272727] text-amber-signal">
+                <p.icon size={24} />
               </div>
-              <p className="mt-4 text-sm text-white/60">{m.label}</p>
+              <h3 className="mt-8 text-xl font-semibold text-white">{p.title}</h3>
+              <p className="mt-3 text-sm text-white/60">{p.body}</p>
+              <ul className="mt-6 flex flex-wrap gap-2">
+                {p.chips.map((c) => (
+                  <li key={c} className="rounded-full bg-[#272727] px-3 py-1 text-xs text-white/70">
+                    {c}
+                  </li>
+                ))}
+              </ul>
             </Reveal>
           ))}
         </div>
-        <Reveal delay={200}>
-          <p className="mt-10 max-w-2xl border-l-2 border-amber-signal pl-4 text-sm text-white/70">
-            <span className="font-medium text-white">Tecnología propia.</span> Modelos de detección
-            entrenados y validados sobre más de 48.000 anotaciones de entornos industriales reales
-            — no un wrapper de APIs de terceros.
+      </div>
+    </section>
+  );
+}
+
+// ---------- Cómo funciona ----------
+function HowItWorks() {
+  const steps = [
+    {
+      icon: VideoCameraIcon,
+      n: "01",
+      t: "Conectamos sus cámaras",
+      d: "Integración por RTSP u ONVIF con la infraestructura existente. Sin obras en la faena ni dispositivos adicionales.",
+    },
+    {
+      icon: CpuIcon,
+      n: "02",
+      t: "La IA analiza cada frame",
+      d: "Modelos entrenados en faenas e instalaciones industriales reales. Procesamiento en el borde o en la nube, según su necesidad.",
+    },
+    {
+      icon: BellRingingIcon,
+      n: "03",
+      t: "Su equipo recibe alertas y reportes",
+      d: "Dashboard operacional, alertas en el momento y reporte ejecutivo por área, turno y contratista.",
+    },
+  ];
+  return (
+    <section id="como-funciona" className="bg-[#181818] py-24">
+      <div className="container-opsia">
+        <SectionHead
+          eyebrow="Cómo funciona"
+          title="De la cámara a la alerta, en menos de dos segundos."
+        />
+        <ol className="mt-16 grid gap-6 md:grid-cols-3">
+          {steps.map((s, i) => (
+            <Reveal
+              as="li"
+              key={s.n}
+              delay={i * 120}
+              className="rounded-2xl border border-white/10 bg-black p-8"
+            >
+              <div className="flex items-center justify-between">
+                <s.icon size={28} className="text-amber-signal" />
+                <span className="font-mono text-sm text-white/40">{s.n}</span>
+              </div>
+              <h3 className="mt-8 text-xl font-semibold text-white">{s.t}</h3>
+              <p className="mt-3 text-sm text-white/60">{s.d}</p>
+            </Reveal>
+          ))}
+        </ol>
+        <Reveal
+          delay={200}
+          className="mt-8 flex items-start gap-4 rounded-2xl border border-white/10 bg-black p-6"
+        >
+          <LockKeyIcon size={24} className="mt-0.5 shrink-0 text-amber-signal" />
+          <p className="text-sm text-white/70">
+            <span className="font-semibold text-white">Privacidad por diseño.</span> Si lo requiere,
+            sus videos nunca salen de su infraestructura. Sin reconocimiento facial de identidad y
+            con difuminado de rostros configurable.
           </p>
         </Reveal>
       </div>
@@ -877,54 +905,53 @@ function Impact() {
   );
 }
 
-// ---------- Dashboard mockup ----------
+// ---------- Producto: dashboard ----------
 function DashboardShowcase() {
+  const ok = "oklch(0.72 0.15 155)";
   return (
-    <section id="recursos" className="bg-paper py-24 md:py-32">
+    <section className="bg-black py-24">
       <div className="container-opsia">
-        <Reveal>
-          <p className="text-eyebrow text-ink/50">Producto en acción</p>
-        </Reveal>
-        <Reveal delay={80}>
-          <h2 className="text-display-lg mt-4 max-w-4xl text-ink">
-            El dashboard operacional. <span className="text-ink/50">Todo lo que ocurre, en una sola vista.</span>
-          </h2>
-        </Reveal>
-
+        <SectionHead
+          eyebrow="Producto"
+          title="El dashboard operacional."
+          muted="Todo lo que ocurre, en una sola vista."
+        />
         <Reveal delay={120}>
-          <div className="mt-14 overflow-hidden border border-ink/15 bg-white shadow-[0_30px_80px_-30px_rgba(0,0,0,0.25)]">
-            <div className="flex items-center gap-2 border-b border-ink/10 bg-ink/[0.03] px-4 py-2.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-ink/15" />
-              <span className="h-2.5 w-2.5 rounded-full bg-ink/15" />
-              <span className="h-2.5 w-2.5 rounded-full bg-ink/15" />
-              <div className="ml-4 flex-1 truncate rounded border border-ink/10 bg-white px-3 py-1 text-xs text-ink/50">
-                app.opsia.ai/operations/site-04
-              </div>
+          <div className="mt-16 overflow-hidden rounded-2xl border border-white/10 bg-[#181818]">
+            <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+              <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
+              <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
+              <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
+              <p className="ml-4 flex-1 truncate rounded-md bg-black px-3 py-1 font-mono text-xs text-white/50">
+                app.opsia.ai/operaciones/mina-norte
+              </p>
             </div>
-            <div className="grid gap-px bg-ink/10 md:grid-cols-[240px_1fr_320px]">
-              <aside className="bg-white p-5">
-                <p className="text-eyebrow text-ink/40">Sitios</p>
-                <ul className="mt-3 space-y-1 text-sm">
-                  {["Mina Norte", "Planta 02", "Puerto Sur", "Obra Central"].map((s, i) => (
-                    <li
-                      key={s}
-                      className={
-                        "flex items-center justify-between px-2 py-1.5 " +
-                        (i === 0 ? "bg-ink text-white" : "text-ink/70")
-                      }
-                    >
-                      <span>{s}</span>
-                      <span
+            <div className="grid gap-px bg-white/10 md:grid-cols-[220px_1fr_300px]">
+              <aside className="bg-[#181818] p-6">
+                <p className="text-eyebrow text-white/40">Sitios</p>
+                <ul className="mt-3 grid gap-1 text-sm">
+                  {["Mina Norte", "Planta concentradora", "Rajo Sur", "Botadero Este"].map(
+                    (s, i) => (
+                      <li
+                        key={s}
                         className={
-                          "h-1.5 w-1.5 rounded-full " +
-                          (i === 1 ? "bg-amber-signal" : "bg-emerald-500")
+                          "flex items-center justify-between rounded-md px-2 py-1 " +
+                          (i === 0 ? "bg-[#313131] text-white" : "text-white/60")
                         }
-                      />
-                    </li>
-                  ))}
+                      >
+                        <span>{s}</span>
+                        <span
+                          className={
+                            "h-1.5 w-1.5 rounded-full " +
+                            (i === 1 ? "bg-amber-signal" : "bg-emerald-500")
+                          }
+                        />
+                      </li>
+                    ),
+                  )}
                 </ul>
-                <p className="text-eyebrow mt-8 text-ink/40">Áreas</p>
-                <ul className="mt-3 space-y-2 text-sm text-ink/70">
+                <p className="text-eyebrow mt-8 text-white/40">Áreas</p>
+                <ul className="mt-3 grid gap-2 text-sm text-white/60">
                   <li>Rajo A · 12 cámaras</li>
                   <li>Chancado · 8 cámaras</li>
                   <li>Talleres · 6 cámaras</li>
@@ -932,56 +959,60 @@ function DashboardShowcase() {
                 </ul>
               </aside>
 
-              <div className="bg-white p-5">
-                <div className="flex items-center justify-between">
+              <div className="bg-[#181818] p-6">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-eyebrow text-ink/40">Mina Norte · Turno A</p>
-                    <h4 className="mt-1 text-lg font-medium text-ink">Cumplimiento en vivo</h4>
+                    <p className="text-eyebrow text-white/40">Mina Norte · Turno A</p>
+                    <h3 className="mt-1 text-lg font-semibold text-white">Cumplimiento en vivo</h3>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-ink/60">
-                    <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-500" /> En línea · 30 cámaras
-                  </div>
+                  <p className="flex items-center gap-2 text-xs text-white/60">
+                    <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-500" /> En línea
+                    · 30 cámaras
+                  </p>
                 </div>
-
-                <div className="mt-5 grid grid-cols-6 gap-1.5">
+                <div className="mt-6 grid grid-cols-6 gap-2">
                   {Array.from({ length: 24 }).map((_, i) => {
-                    const s = i % 7 === 3 ? "warn" : i % 11 === 5 ? "review" : "ok";
-                    const bg =
-                      s === "ok"
-                        ? "bg-emerald-500/80"
-                        : s === "warn"
-                          ? "bg-amber-signal"
-                          : "bg-ink/25";
-                    return <div key={i} className={"h-10 " + bg} title={`Zona ${i + 1}`} />;
+                    const s =
+                      i % 7 === 3
+                        ? "bg-amber-signal"
+                        : i % 11 === 5
+                          ? "bg-white/20"
+                          : "bg-emerald-500/70";
+                    return (
+                      <div key={i} className={"h-8 rounded-sm " + s} title={`Zona ${i + 1}`} />
+                    );
                   })}
                 </div>
-                <div className="mt-3 flex gap-4 text-[11px] text-ink/60">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 bg-emerald-500" /> Seguro
+                <div className="mt-3 flex gap-4 text-xs text-white/60">
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-sm bg-emerald-500" /> Seguro
                   </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 bg-amber-signal" /> Alerta
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-sm bg-amber-signal" /> Alerta
                   </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 bg-ink/25" /> Revisar
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-sm bg-white/20" /> Revisar
                   </span>
                 </div>
-
                 <div className="mt-8">
-                  <div className="flex items-baseline justify-between">
-                    <p className="text-sm font-medium text-ink">Tendencia semanal · Contratista Andes SA</p>
-                    <p className="font-display text-2xl font-medium text-ink">
-                      86% <span className="text-eyebrow align-middle text-ink/40">Cumplimiento EPP</span>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-sm font-medium text-white">
+                      Tendencia semanal · Contratista Andes SA
+                    </p>
+                    <p className="text-2xl font-semibold text-white">
+                      86% <span className="text-eyebrow align-middle text-white/40">EPP</span>
                     </p>
                   </div>
                   <div className="mt-4 flex h-32 items-end gap-2">
                     {[62, 68, 71, 74, 73, 79, 86].map((v, i) => (
-                      <div key={i} className="flex-1">
+                      <div key={i} className="flex h-full flex-1 flex-col justify-end">
                         <div
-                          className={"w-full " + (i === 6 ? "bg-amber-signal" : "bg-ink")}
+                          className={
+                            "w-full rounded-t-sm " + (i === 6 ? "bg-amber-signal" : "bg-[#313131]")
+                          }
                           style={{ height: `${v}%` }}
                         />
-                        <p className="mt-1 text-center text-[10px] text-ink/40">
+                        <p className="mt-1 text-center text-xs text-white/40">
                           {["L", "M", "M", "J", "V", "S", "D"][i]}
                         </p>
                       </div>
@@ -990,46 +1021,52 @@ function DashboardShowcase() {
                 </div>
               </div>
 
-              <aside className="bg-white p-5">
+              <aside className="bg-[#181818] p-6">
                 <div className="flex items-center justify-between">
-                  <p className="text-eyebrow text-ink/40">Alertas en vivo</p>
-                  <span className="text-[11px] text-ink/50">últimos 15 min</span>
+                  <p className="text-eyebrow text-white/40">Alertas en vivo</p>
+                  <span className="text-xs text-white/50">últimos 15 min</span>
                 </div>
-                <ul className="mt-3 space-y-2.5">
+                <ul className="mt-4 grid gap-3">
                   {[
-                    { t: "09:41", z: "Rajo A · CAM-07", m: "Trabajador sin chaleco reflectivo", s: "warn" },
-                    { t: "09:38", z: "Chancado · CAM-03", m: "Proximidad persona–volquete 3.1 m", s: "warn" },
-                    { t: "09:34", z: "Accesos · CAM-01", m: "Vehículo no autorizado", s: "warn" },
-                    { t: "09:28", z: "Talleres · CAM-09", m: "EPP completo confirmado", s: "ok" },
-                    { t: "09:22", z: "Rajo A · CAM-05", m: "Casco no detectado", s: "warn" },
-                  ].map((a, i) => (
-                    <li
-                      key={i}
-                      className="flex gap-3 border-l-2 py-1 pl-3"
-                      style={{
-                        borderLeftColor:
-                          a.s === "warn" ? "var(--amber-signal)" : "oklch(0.72 0.15 155)",
-                      }}
-                    >
-                      <div className="relative h-10 w-14 shrink-0 overflow-hidden bg-ink/85">
-                        {/* mini detección: caja anclada dentro del thumbnail */}
+                    {
+                      t: "09:41",
+                      z: "Rajo A · CAM 07",
+                      m: "Trabajador sin chaleco reflectivo",
+                      warn: true,
+                    },
+                    {
+                      t: "09:38",
+                      z: "Chancado · CAM 03",
+                      m: "Persona a 3,1 m de un volquete",
+                      warn: true,
+                    },
+                    { t: "09:34", z: "Accesos · CAM 01", m: "Vehículo no autorizado", warn: true },
+                    {
+                      t: "09:28",
+                      z: "Talleres · CAM 09",
+                      m: "EPP completo confirmado",
+                      warn: false,
+                    },
+                    { t: "09:22", z: "Rajo A · CAM 05", m: "Casco no detectado", warn: true },
+                  ].map((a) => (
+                    <li key={a.t} className="flex gap-3 rounded-lg bg-black p-2">
+                      <div className="relative h-10 w-14 shrink-0 overflow-hidden rounded-md bg-[#272727]">
                         <span
                           className="absolute border"
                           style={{
                             top: "18%",
-                            left: a.s === "warn" ? "30%" : "22%",
+                            left: a.warn ? "30%" : "22%",
                             width: "38%",
                             height: "64%",
-                            borderColor:
-                              a.s === "warn" ? "var(--amber-signal)" : "oklch(0.72 0.15 155)",
+                            borderColor: a.warn ? "var(--amber-signal)" : ok,
                           }}
                         />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[11px] text-ink/50">
+                        <p className="font-mono text-xs text-white/50">
                           {a.t} · {a.z}
                         </p>
-                        <p className="truncate text-xs text-ink">{a.m}</p>
+                        <p className="truncate text-xs text-white">{a.m}</p>
                       </div>
                     </li>
                   ))}
@@ -1037,113 +1074,181 @@ function DashboardShowcase() {
               </aside>
             </div>
           </div>
+          <p className="mt-4 text-xs text-white/40">Interfaz ilustrativa con datos de ejemplo.</p>
         </Reveal>
       </div>
     </section>
   );
 }
 
-// ---------- Service model ----------
+// ---------- Planes + reversión de riesgo ----------
 function ServiceModel({ onCta }: { onCta: () => void }) {
   const tiers = [
     {
       name: "Auditoría",
-      tag: "Ideal para empezar",
-      d: "Análisis de video grabado. Reporte de cumplimiento y hallazgos en 72 horas. Sin integración a tiempo real.",
+      tag: "Para empezar",
+      d: "Análisis de video grabado. Reporte de cumplimiento y hallazgos en 72 horas. Sin integración en tiempo real.",
       features: ["Análisis retrospectivo", "Reporte ejecutivo", "Recomendaciones priorizadas"],
       highlight: false,
     },
     {
       name: "Monitoreo continuo",
-      tag: "Más elegido",
+      tag: "El más elegido",
       d: "Procesamiento en vivo, dashboard operacional y alertas en el momento para el equipo HSE.",
-      features: ["Alertas en tiempo real", "Dashboard multi-sitio", "Reportes por turno y contratista"],
+      features: [
+        "Alertas en tiempo real",
+        "Dashboard multisitio",
+        "Reportes por turno y contratista",
+      ],
       highlight: true,
     },
     {
       name: "Enterprise",
-      tag: "Multi-sitio",
-      d: "Integración con sistemas HSE existentes. Modelos a medida del uniforme y procedimientos de su empresa.",
-      features: ["Modelos a medida", "Integración HSE / SSO", "SLA dedicado", "Procesamiento on-premise"],
+      tag: "Multisitio",
+      d: "Integración con sus sistemas HSE. Modelos a medida del uniforme y los procedimientos de su empresa.",
+      features: [
+        "Modelos a medida",
+        "Integración HSE y SSO",
+        "SLA dedicado",
+        "Procesamiento on premise",
+      ],
       highlight: false,
     },
   ];
   return (
-    <section className="bg-paper py-24 md:py-32">
+    <section id="planes" className="bg-[#181818] py-24">
       <div className="container-opsia">
-        <Reveal>
-          <p className="text-eyebrow text-ink/50">Modelo de servicio</p>
+        <SectionHead eyebrow="Planes" title="Tres formas de empezar." muted="Sin sorpresas." />
+        <Reveal
+          delay={120}
+          className="mt-12 grid gap-4 rounded-2xl border border-white/10 bg-black p-6 sm:grid-cols-3"
+        >
+          {[
+            ["1", "Llamada de 30 minutos"],
+            ["2", "Auditoría piloto sobre video de su operación"],
+            ["3", "Propuesta con números reales de su sitio"],
+          ].map(([n, t]) => (
+            <div key={n} className="flex items-center gap-3">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#272727] font-mono text-sm text-amber-signal">
+                {n}
+              </span>
+              <span className="text-sm text-white/80">{t}</span>
+            </div>
+          ))}
         </Reveal>
-        <Reveal delay={80}>
-          <h2 className="text-display-lg mt-4 max-w-3xl text-ink">
-            Tres formas de empezar. <span className="text-ink/50">Sin sorpresas.</span>
-          </h2>
-        </Reveal>
-
-        <Reveal delay={120}>
-          <div className="mt-10 flex flex-col gap-3 border-l-2 border-amber-signal pl-4 text-sm text-ink/70 md:flex-row md:items-center md:gap-8">
-            <span className="font-medium text-ink">Cómo empezamos:</span>
-            <span>① Llamada de 30 minutos</span>
-            <span className="hidden text-ink/30 md:inline">→</span>
-            <span>② Auditoría piloto sobre video de SU operación</span>
-            <span className="hidden text-ink/30 md:inline">→</span>
-            <span>③ Propuesta con números reales de su sitio</span>
-          </div>
-        </Reveal>
-
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-6 md:grid-cols-3">
           {tiers.map((t, i) => (
             <Reveal key={t.name} delay={i * 100}>
               <div
                 className={
-                  "flex h-full flex-col border p-8 " +
-                  (t.highlight
-                    ? "border-ink bg-ink text-white"
-                    : "border-ink/15 bg-white text-ink")
+                  "flex h-full flex-col rounded-2xl border p-8 " +
+                  (t.highlight ? "border-amber-signal/60 bg-[#272727]" : "border-white/10 bg-black")
                 }
               >
-                <div className="flex items-center justify-between">
-                  <p
-                    className={
-                      "text-eyebrow " + (t.highlight ? "text-amber-signal" : "text-ink/40")
-                    }
-                  >
-                    {t.tag}
-                  </p>
-                  {t.highlight && <span className="h-1.5 w-1.5 rounded-full bg-amber-signal" />}
-                </div>
-                <h3 className="mt-4 text-2xl font-medium">{t.name}</h3>
                 <p
                   className={
-                    "mt-3 text-sm leading-relaxed " +
-                    (t.highlight ? "text-white/70" : "text-ink/70")
+                    "text-eyebrow " + (t.highlight ? "text-amber-signal" : "text-white/40")
                   }
                 >
-                  {t.d}
+                  {t.tag}
                 </p>
-                <ul
-                  className={
-                    "mt-6 space-y-3 border-t pt-6 text-sm " +
-                    (t.highlight ? "border-white/15 text-white/80" : "border-ink/10 text-ink/80")
-                  }
-                >
+                <h3 className="mt-4 text-2xl font-semibold text-white">{t.name}</h3>
+                <p className="mt-3 text-sm text-white/60">{t.d}</p>
+                <ul className="mt-6 grid gap-3 text-sm text-white/80">
                   {t.features.map((f) => (
-                    <li key={f} className="flex gap-2">
-                      <span
-                        className={
-                          "mt-2 h-1 w-1 shrink-0 " + (t.highlight ? "bg-amber-signal" : "bg-ink")
-                        }
+                    <li key={f} className="flex items-start gap-2">
+                      <CheckIcon
+                        size={16}
+                        weight="bold"
+                        className="mt-0.5 shrink-0 text-amber-signal"
                       />
                       {f}
                     </li>
                   ))}
                 </ul>
-                <button
-                  onClick={onCta}
-                  className={"mt-8 justify-center " + (t.highlight ? "btn-amber" : "btn-ghost-light")}
-                >
-                  Conversar con nosotros
-                </button>
+                <div className="mt-auto pt-8">
+                  <button
+                    onClick={onCta}
+                    className={"w-full " + (t.highlight ? "btn-primary" : "btn-secondary")}
+                  >
+                    Conversar sobre este plan
+                  </button>
+                </div>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+        <Reveal
+          delay={200}
+          className="mt-8 flex items-start gap-4 rounded-2xl border border-white/10 bg-black p-6"
+        >
+          <ShieldCheckIcon size={24} className="mt-0.5 shrink-0 text-amber-signal" />
+          <p className="text-sm text-white/70">
+            <span className="font-semibold text-white">Riesgo mínimo para empezar.</span> La
+            auditoría piloto trabaja sobre video que usted ya tiene grabado: no toca su red, no
+            requiere equipos nuevos y entrega resultados en 72 horas.
+          </p>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+// ---------- Equipo ----------
+function Team() {
+  const founders = [
+    {
+      name: "Maximiliano Lombardia",
+      role: "Cofundador · Producto",
+      base: "Buenos Aires",
+      photo: teamMaxi,
+    },
+    {
+      name: "Felipe Bridge",
+      role: "Cofundador · Ingeniería",
+      base: "San Juan",
+      photo: teamFelipe,
+    },
+    {
+      name: "Emiliano Lescuras",
+      role: "Cofundador · Datos",
+      base: "San Juan",
+      photo: teamEmiliano,
+    },
+  ];
+  return (
+    <section className="bg-black py-24">
+      <div className="container-opsia">
+        <SectionHead
+          eyebrow="Quiénes somos"
+          title="Un equipo de IA con los pies en la tierra minera."
+        />
+        <Reveal delay={140}>
+          <p className="mt-6 max-w-2xl text-white/60">
+            OPSIA nace en San Juan, corazón de la minería argentina, con formación en inteligencia
+            artificial y ciencia de datos, y una convicción: la seguridad de un operario no puede
+            depender de cuántos monitores alcanza a mirar un supervisor.
+          </p>
+        </Reveal>
+        <div className="mt-16 grid gap-6 md:grid-cols-3">
+          {founders.map((f, i) => (
+            <Reveal
+              key={f.name}
+              delay={i * 100}
+              className="rounded-2xl border border-white/10 bg-[#181818] p-2"
+            >
+              <img
+                src={f.photo}
+                alt={`Retrato de ${f.name}`}
+                width={800}
+                height={800}
+                loading="lazy"
+                className="aspect-square w-full rounded-lg object-cover"
+              />
+              <div className="p-4">
+                <h3 className="text-lg font-semibold text-white">{f.name}</h3>
+                <p className="mt-1 text-sm text-white/60">{f.role}</p>
+                <p className="text-eyebrow mt-3 text-white/40">{f.base}</p>
               </div>
             </Reveal>
           ))}
@@ -1154,55 +1259,94 @@ function ServiceModel({ onCta }: { onCta: () => void }) {
 }
 
 // ---------- FAQ ----------
+const FAQ_ITEMS = [
+  {
+    q: "¿Sirven mis cámaras actuales?",
+    a: "Sí. OPSIA se integra con la mayoría de las cámaras IP mediante RTSP u ONVIF. No requerimos hardware nuevo ni reemplazar el CCTV existente.",
+  },
+  {
+    q: "¿Qué necesito para la auditoría piloto?",
+    a: "Video grabado de sus propias cámaras. Lo analizamos sin conectarnos a su red y en 72 horas le entregamos un reporte de cumplimiento con hallazgos priorizados.",
+  },
+  {
+    q: "¿Dónde se procesa el video?",
+    a: "En el borde, en su nube o en la nuestra. Muchas operaciones eligen procesamiento on premise para que el video nunca salga de su infraestructura.",
+  },
+  {
+    q: "¿Cuánto tarda la implementación?",
+    a: "Una auditoría entrega resultados en 72 horas. Un despliegue de monitoreo continuo por sitio suele tomar entre 2 y 6 semanas, según la cantidad de cámaras y reglas.",
+  },
+  {
+    q: "¿Funciona en faenas remotas con poca conectividad?",
+    a: "Sí. El procesamiento puede correr en el borde, dentro de la faena, y sólo envía alertas y reportes. El video no necesita salir del sitio.",
+  },
+  {
+    q: "¿Detecta el uniforme específico de mi empresa?",
+    a: "En el plan Enterprise entrenamos modelos a medida del uniforme, los colores corporativos, los distintivos de rol y los procedimientos de su operación.",
+  },
+  {
+    q: "¿Cómo manejan la privacidad de los trabajadores?",
+    a: "Aplicamos privacidad por diseño: sin reconocimiento facial de identidad, retención mínima de imágenes y difuminado de rostros configurable en los reportes.",
+  },
+  {
+    q: "¿Funciona de noche o con polvo, lluvia o niebla?",
+    a: "Los modelos están entrenados en condiciones adversas de faena. Recomendamos una iluminación mínima adecuada; en condiciones extremas ajustamos umbrales y calibración por cámara.",
+  },
+  {
+    q: "¿Qué pasa después de la primera llamada?",
+    a: "Si hay encaje, coordinamos la auditoría piloto sobre su video. Con esos resultados le presentamos una propuesta con números reales de su sitio, sin compromiso de contratación.",
+  },
+];
+
 function FAQ() {
-  const items = [
-    { q: "¿Sirven mis cámaras actuales?", a: "Sí. OPSIA se integra con la mayoría de cámaras IP mediante RTSP u ONVIF. No requerimos hardware nuevo ni reemplazo del CCTV existente." },
-    { q: "¿Dónde se procesa el video?", a: "En el borde, en su nube o en la nuestra. Muchas operaciones eligen procesamiento on-premise para que el video nunca salga de su infraestructura." },
-    { q: "¿Cuánto tarda la implementación?", a: "Una auditoría entrega resultados en 72 h. Un despliegue de monitoreo continuo por sitio suele tomar entre 2 y 6 semanas, según cantidad de cámaras y reglas." },
-    { q: "¿Detecta el uniforme específico de mi empresa?", a: "En el plan Enterprise entrenamos modelos a medida del uniforme, colores corporativos, distintivos de rol y procedimientos particulares de su operación." },
-    { q: "¿Cómo manejan la privacidad de los trabajadores?", a: "Aplicamos privacidad por diseño: sin reconocimiento facial de identidad, retención mínima de imágenes y difuminado de rostros configurable en reportes." },
-    { q: "¿Funciona de noche o con polvo, lluvia o niebla?", a: "Los modelos están entrenados en condiciones industriales adversas. Recomendamos iluminación mínima adecuada; en condiciones extremas ajustamos umbrales y calibración por cámara." },
-  ];
   const [open, setOpen] = useState<number | null>(0);
   return (
-    <section className="bg-ink py-24 text-white md:py-32">
-      <div className="container-opsia grid gap-10 md:grid-cols-[1fr_1.6fr] md:gap-16">
-        <Reveal>
-          <div>
-            <p className="text-eyebrow text-white/50">Preguntas frecuentes</p>
-            <h2 className="text-display-lg mt-4 text-white">
-              Todo lo que operaciones y HSE preguntan primero.
+    <section id="faq" className="bg-[#181818] py-24">
+      <div className="container-opsia grid gap-12 md:grid-cols-[1fr_1.6fr]">
+        <div>
+          <Reveal>
+            <p className="text-eyebrow text-amber-signal">Preguntas frecuentes</p>
+          </Reveal>
+          <Reveal delay={100}>
+            <h2 className="mt-4 text-4xl font-semibold tracking-tight text-white">
+              Lo que operaciones y HSE preguntan primero.
             </h2>
-          </div>
-        </Reveal>
-        <div className="border-t border-white/10">
-          {items.map((it, i) => {
+          </Reveal>
+        </div>
+        <div className="grid gap-2">
+          {FAQ_ITEMS.map((it, i) => {
             const isOpen = open === i;
             return (
-              <div key={i} className="border-b border-white/10">
-                <button
-                  onClick={() => setOpen(isOpen ? null : i)}
-                  className="flex w-full items-center justify-between gap-6 py-6 text-left"
-                  aria-expanded={isOpen}
-                >
-                  <span className="text-base font-medium md:text-lg">{it.q}</span>
-                  <span
-                    className={
-                      "grid h-8 w-8 shrink-0 place-items-center border border-white/20 transition " +
-                      (isOpen ? "bg-amber-signal text-ink" : "text-white/60")
-                    }
+              <div key={it.q} className="rounded-2xl border border-white/10 bg-black">
+                <h3>
+                  <button
+                    onClick={() => setOpen(isOpen ? null : i)}
+                    className="flex w-full items-center justify-between gap-6 rounded-2xl px-6 py-4 text-left focus-visible:outline-2 focus-visible:outline-amber-signal"
+                    aria-expanded={isOpen}
+                    aria-controls={`faq-${i}`}
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d={isOpen ? "M5 12h14" : "M12 5v14M5 12h14"} />
-                    </svg>
-                  </span>
-                </button>
+                    <span className="text-base font-medium text-white md:text-lg">{it.q}</span>
+                    <span
+                      className={
+                        "grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] " +
+                        (isOpen ? "bg-amber-signal text-black" : "bg-[#272727] text-white/70")
+                      }
+                    >
+                      {isOpen ? (
+                        <MinusIcon size={14} weight="bold" />
+                      ) : (
+                        <PlusIcon size={14} weight="bold" />
+                      )}
+                    </span>
+                  </button>
+                </h3>
                 <div
-                  className="grid overflow-hidden transition-[grid-template-rows] duration-300"
+                  id={`faq-${i}`}
+                  className="grid overflow-hidden transition-[grid-template-rows] duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
                   style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
                 >
                   <div className="min-h-0">
-                    <p className="pb-6 pr-14 text-sm leading-relaxed text-white/70">{it.a}</p>
+                    <p className="px-6 pb-6 text-sm text-white/70">{it.a}</p>
                   </div>
                 </div>
               </div>
@@ -1214,35 +1358,32 @@ function FAQ() {
   );
 }
 
-// ---------- Final CTA ----------
+// ---------- CTA final (idéntico al del hero) ----------
 function FinalCTA({ onCta, onAudit }: { onCta: () => void; onAudit: () => void }) {
   return (
-    <section className="bg-ink py-20 md:py-28">
+    <section className="bg-black py-24">
       <div className="container-opsia">
-        <div className="relative overflow-hidden bg-amber-signal p-10 md:p-16">
-          <div className="pointer-events-none absolute -right-12 -top-12 hidden h-36 w-36 border border-ink/15 lg:block" />
-          <p className="text-eyebrow text-ink/70">Decisión</p>
-          <h2 className="text-display-lg mt-4 max-w-3xl text-ink">
-            La próxima infracción puede ser un incidente. O una alerta.
+        <Reveal className="rounded-2xl border border-white/10 bg-[#181818] px-6 py-16 text-center md:px-16">
+          <h2 className="text-hero mx-auto max-w-[680px] text-4xl font-semibold tracking-tight md:text-5xl">
+            La próxima infracción puede ser un incidente.
+            <br />O una alerta.
           </h2>
-          <div className="mt-10 flex flex-wrap gap-3">
-            <button
-              onClick={onCta}
-              className="inline-flex items-center gap-2 bg-ink px-6 py-3.5 text-sm font-medium text-white transition hover:bg-ink-soft"
-            >
-              Agendar demo
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M5 12h14M13 5l7 7-7 7" />
-              </svg>
+          <p className="mx-auto mt-6 max-w-xl text-white/60">
+            En 30 minutos le mostramos cómo se ve OPSIA sobre una operación como la suya.
+          </p>
+          <div className="mt-8 flex flex-col items-center gap-4">
+            <button onClick={onCta} className="btn-primary">
+              {CTA_LABEL}
+              <ArrowRightIcon size={16} weight="bold" />
             </button>
             <button
               onClick={onAudit}
-              className="inline-flex items-center gap-2 border border-ink px-6 py-3.5 text-sm font-medium text-ink transition hover:bg-ink hover:text-white"
+              className="text-sm text-white/60 underline underline-offset-4 transition-colors duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] hover:text-white"
             >
-              Solicitar auditoría piloto
+              O solicite directamente una auditoría piloto
             </button>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -1250,87 +1391,68 @@ function FinalCTA({ onCta, onAudit }: { onCta: () => void; onAudit: () => void }
 
 // ---------- Footer ----------
 function Footer() {
-  const [subscribed, setSubscribed] = useState(false);
   const cols = [
-    { t: "Soluciones", items: ["Minería", "Construcción", "Oil & Gas", "Otras industrias"] },
-    { t: "Plataforma", items: ["Cumplimiento EPP", "Maquinaria y proximidad", "Evidencia y reportes", "Integraciones"] },
-    { t: "Empresa", items: ["Sobre OPSIA", "Investigación", "Recursos", "Contacto"] },
-    { t: "Legal", items: ["Privacidad", "Términos", "Seguridad de datos", "GDPR / Ley 25.326"] },
+    {
+      t: "Recorrido",
+      items: [
+        ["Vista de operador", "#escena-deteccion"],
+        ["EPP en faena", "#escena-epp"],
+        ["Proximidad", "#escena-proximidad"],
+      ],
+    },
+    {
+      t: "Plataforma",
+      items: [
+        ["Capacidades", "#plataforma"],
+        ["Cómo funciona", "#como-funciona"],
+        ["Planes", "#planes"],
+      ],
+    },
+    {
+      t: "Empresa",
+      items: [
+        ["Preguntas frecuentes", "#faq"],
+        ["Contacto", `mailto:${CONTACT_EMAIL}`],
+      ],
+    },
   ];
   return (
-    <footer className="bg-ink pb-10 pt-24 text-white/80">
+    <footer className="bg-black pt-16 pb-8 text-white/80">
       <div className="container-opsia">
-        <div className="grid gap-12 border-t border-white/10 pt-12 md:grid-cols-[1.4fr_repeat(4,1fr)]">
+        <div className="grid gap-12 border-t border-white/10 pt-12 md:grid-cols-[1.4fr_repeat(3,1fr)]">
           <div>
             <div className="flex items-center gap-3">
-              <img src={logoMark} alt="" width={36} height={27} className="h-[27px] w-auto" />
-              <div>
-                <p className="font-display text-xl font-semibold leading-none tracking-[-0.04em] text-white">
-                  OPSIA<span className="text-amber-signal">.</span>
-                </p>
-                <p className="mt-1 text-[10px] tracking-[0.28em] text-amber-signal/90">
-                  AI VISION FOR MINING
-                </p>
-              </div>
+              <img src={logoMark} alt="" width={32} height={24} className="h-6 w-auto" />
+              <p className="text-xl font-semibold tracking-tight text-white">
+                OPSIA<span className="text-amber-signal">.</span>
+              </p>
             </div>
             <p className="mt-4 max-w-xs text-sm text-white/60">
-              Visión artificial para operaciones seguras. Convertimos sus cámaras en un supervisor que no se distrae.
+              Visión artificial para seguridad minera. Convertimos las cámaras de su faena en un
+              supervisor que no se distrae.
             </p>
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="mt-4 inline-flex items-center gap-2 text-sm text-white/80 transition hover:text-amber-signal"
+              className="mt-4 inline-flex items-center gap-2 text-sm text-white/80 transition-colors duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] hover:text-amber-signal"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="5" width="18" height="14" rx="1" />
-                <path d="M3 7l9 6 9-6" />
-              </svg>
+              <EnvelopeSimpleIcon size={16} />
               {CONTACT_EMAIL}
             </a>
-            <p className="mt-3 max-w-xs text-xs leading-relaxed text-white/40">
+            <p className="mt-3 max-w-xs text-xs text-white/40">
               Cobertura: San Juan · Mendoza · Salta · Jujuy · Neuquén · Río Negro · Buenos Aires
             </p>
-            <form
-              className="mt-6"
-              onSubmit={(e) => {
-                e.preventDefault();
-                setSubscribed(true);
-                (e.currentTarget as HTMLFormElement).reset();
-              }}
-            >
-              <label htmlFor="newsletter" className="text-eyebrow text-white/50">
-                Novedades de seguridad industrial e IA · 1 email/mes
-              </label>
-              {subscribed ? (
-                <p className="mt-3 border border-amber-signal/40 px-3 py-2.5 text-sm text-amber-signal">
-                  Listo — le llega el próximo número.
-                </p>
-              ) : (
-                <div className="mt-3 flex border border-white/15">
-                  <input
-                    id="newsletter"
-                    type="email"
-                    required
-                    placeholder="usted@empresa.com"
-                    className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/30"
-                  />
-                  <button className="bg-amber-signal px-4 text-sm text-ink transition hover:brightness-95">
-                    Suscribir
-                  </button>
-                </div>
-              )}
-            </form>
           </div>
           {cols.map((c) => (
             <div key={c.t}>
               <p className="text-eyebrow text-white/50">{c.t}</p>
-              <ul className="mt-4 space-y-2.5 text-sm text-white/70">
-                {c.items.map((i) => (
-                  <li key={i}>
+              <ul className="mt-4 grid gap-2 text-sm text-white/70">
+                {c.items.map(([label, href]) => (
+                  <li key={label}>
                     <a
-                      href={i === "Contacto" ? `mailto:${CONTACT_EMAIL}` : "#"}
-                      className="transition hover:text-white"
+                      href={href}
+                      className="transition-colors duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] hover:text-white"
                     >
-                      {i}
+                      {label}
                     </a>
                   </li>
                 ))}
@@ -1339,7 +1461,7 @@ function Footer() {
           ))}
         </div>
         <div className="mt-16 flex flex-col justify-between gap-4 border-t border-white/10 pt-6 text-xs text-white/40 md:flex-row">
-          <p>© 2026 OPSIA — Visión artificial para operaciones seguras.</p>
+          <p>© 2026 OPSIA. Visión artificial para seguridad minera.</p>
           <p>San Juan · Buenos Aires · Argentina</p>
         </div>
       </div>
@@ -1347,22 +1469,28 @@ function Footer() {
   );
 }
 
-// ---------- Page ----------
+// ---------- Página ----------
 function OpsiaLanding() {
   const [modal, setModal] = useState<{ open: boolean; intent?: string }>({ open: false });
   const openDemo = () => setModal({ open: true, intent: "demo" });
   const openAudit = () => setModal({ open: true, intent: "audit" });
   return (
-    <div className="min-h-screen bg-ink">
+    <div className="min-h-screen bg-black">
+      <a
+        href="#contenido"
+        className="sr-only z-[200] rounded-full bg-amber-signal px-3 py-2 font-semibold text-black focus:not-sr-only focus:fixed focus:top-4 focus:left-4"
+      >
+        Saltar al contenido
+      </a>
       <Navbar onCta={openDemo} />
       <main>
         <Hero onCta={openDemo} />
-        <TrustBar />
+        <div id="contenido" tabIndex={-1} />
+        <Proof />
         <Problem />
+        <TaglineReveal />
         <Platform />
         <HowItWorks />
-        <Solutions onCta={openDemo} />
-        <Impact />
         <DashboardShowcase />
         <ServiceModel onCta={openDemo} />
         <Team />
@@ -1370,7 +1498,11 @@ function OpsiaLanding() {
         <FinalCTA onCta={openDemo} onAudit={openAudit} />
       </main>
       <Footer />
-      <ContactModal open={modal.open} onClose={() => setModal({ open: false })} intent={modal.intent} />
+      <ContactModal
+        open={modal.open}
+        onClose={() => setModal({ open: false })}
+        intent={modal.intent}
+      />
     </div>
   );
 }
