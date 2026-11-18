@@ -301,12 +301,37 @@
   will-change: transform;
   backface-visibility: hidden;
 }
+/* el texto va abajo en mobile y a la izquierda en desktop: se oscurece sólo esa zona y el
+   borde inferior del HUD, el resto de la imagen queda limpio */
 .sw-scrim {
-  background: rgb(0 0 0 / 0.5);
+  background:
+    linear-gradient(to top, rgb(0 0 0 / 0.88) 0%, rgb(0 0 0 / 0.55) 42%, rgb(0 0 0 / 0.12) 72%),
+    linear-gradient(to bottom, rgb(0 0 0 / 0.45) 0%, transparent 18%);
 }
 @media (min-width: 768px) {
   .sw-scrim {
-    background: rgb(0 0 0 / 0.4);
+    background:
+      linear-gradient(
+        90deg,
+        rgb(0 0 0 / 0.78) 0%,
+        rgb(0 0 0 / 0.5) 34%,
+        rgb(0 0 0 / 0.12) 62%,
+        transparent 78%
+      ),
+      linear-gradient(to top, rgb(0 0 0 / 0.5) 0%, transparent 22%),
+      linear-gradient(to bottom, rgb(0 0 0 / 0.35) 0%, transparent 16%);
+  }
+  .sw-stage[data-side="right"] .sw-scrim {
+    background:
+      linear-gradient(
+        270deg,
+        rgb(0 0 0 / 0.8) 0%,
+        rgb(0 0 0 / 0.55) 34%,
+        rgb(0 0 0 / 0.12) 62%,
+        transparent 78%
+      ),
+      linear-gradient(to top, rgb(0 0 0 / 0.5) 0%, transparent 22%),
+      linear-gradient(to bottom, rgb(0 0 0 / 0.35) 0%, transparent 16%);
   }
 }
 /* grano de film estático: SVG inline de unos pocos bytes */
