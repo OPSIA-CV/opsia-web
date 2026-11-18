@@ -509,6 +509,7 @@ function buildScenes(onCta: () => void): WorldScene[] {
         { x: 26.5, y: 83.5, w: 6.5, h: 10.5, label: "Vehículo · ruta 2", tone: "info" },
         { x: 73.5, y: 47.5, w: 4, h: 5, label: "Vehículo", tone: "info" },
       ],
+      caption: ILLUSTRATIVE,
       copy: (
         <div className="max-w-[680px]">
           <p className="sw-fade inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/40 px-3 py-1 backdrop-blur">
@@ -529,9 +530,10 @@ function buildScenes(onCta: () => void): WorldScene[] {
             </span>
           </h1>
           <p className="sw-fade mt-6 max-w-[680px] text-base text-white/80 md:text-lg">
-            OPSIA convierte el CCTV de su faena en un supervisor que no se distrae. EPP, maquinaria
-            pesada y proximidad, con alertas en menos de 2 segundos. Sin hardware nuevo, sin detener
-            la operación.
+            OPSIA convierte el CCTV de su faena en un supervisor que no se distrae. Hoy auditamos el
+            cumplimiento de EPP sobre el video que usted ya graba. Las alertas en vivo de maquinaria
+            y proximidad llegan con el programa piloto. Sin hardware nuevo, sin detener la
+            operación.
           </p>
           <div className="sw-fade mt-8">
             <button onClick={onCta} className="btn-primary">
@@ -587,7 +589,7 @@ function buildScenes(onCta: () => void): WorldScene[] {
         <SceneCopy
           eyebrow="EPP en faena"
           title="Nacimos en la minería. Ahí el estándar es más alto."
-          body="Casco, chaleco reflectivo, lentes, botas y protección auditiva, en rajo, planta y talleres. Persona por persona, turno por turno."
+          body="Casco, chaleco reflectivo, lentes, botas y guantes, en rajo, planta y talleres. Persona por persona, turno por turno."
           tags={["Rajo", "Planta", "Talleres", "Por contratista"]}
         />
       ),
@@ -610,10 +612,10 @@ function buildScenes(onCta: () => void): WorldScene[] {
       ],
       copy: (
         <SceneCopy
-          eyebrow="Maquinaria y proximidad"
+          eyebrow="Maquinaria y proximidad · programa piloto"
           title="Un volquete no ve lo que tiene al lado. OPSIA sí."
-          body="Volquetes, excavadoras, cargadores y camionetas. Alerta en el momento en que una persona entra al radio de riesgo de un equipo en movimiento, y control de acceso a zonas restringidas."
-          tags={["Volquete", "Excavadora", "Cargador", "Accesos"]}
+          body="El modelo ya reconoce volquetes, excavadoras, motoniveladoras y camionetas. La alerta cuando una persona entra al radio de riesgo de un equipo en movimiento está en desarrollo y se valida en el programa piloto."
+          tags={["Volquete", "Excavadora", "Motoniveladora", "En piloto"]}
         />
       ),
     },
@@ -663,7 +665,7 @@ function Hero({ onCta }: { onCta: () => void }) {
 // ---------- Prueba: métricas verificables ----------
 function Proof() {
   const metrics = [
-    { pre: "<", v: 2, suf: " s", label: "de la cámara a la alerta" },
+    { pre: "", v: 72, suf: " h", label: "del video grabado al reporte de auditoría" },
     { pre: "", v: 26, suf: "", label: "clases detectadas entre EPP, personas y maquinaria" },
     {
       pre: "+",
@@ -692,19 +694,19 @@ function Proof() {
 }
 
 // ---------- Problema ----------
+type Stat = { n?: number; s?: string; big?: string; t: string; src?: string };
+
 function Problem() {
-  const stats = [
+  const stats: Stat[] = [
     {
       n: 60,
       s: "%",
-      t: "de los incidentes graves involucran EPP ausente o incorrecto.",
+      t: "de los incidentes graves involucran EPP ausente o colisiones entre persona y máquina.",
       src: "Referencias OSHA y literatura HSE",
     },
     {
-      n: 8,
-      s: " s",
-      t: "es el tiempo medio en que una infracción de proximidad se vuelve incidente.",
-      src: "Estudios de seguridad minera",
+      big: "Segundos",
+      t: "es lo que tarda una infracción de proximidad en volverse incidente. Nadie mirando monitores llega a tiempo.",
     },
     {
       n: 40,
@@ -729,11 +731,15 @@ function Problem() {
               className="rounded-2xl border border-white/10 bg-[#181818] p-8"
             >
               <p className="text-6xl font-semibold tracking-tight text-white tabular-nums">
-                <Counter to={k.n} />
-                {k.s}
+                {k.big ?? (
+                  <>
+                    <Counter to={k.n ?? 0} />
+                    {k.s}
+                  </>
+                )}
               </p>
               <p className="mt-4 text-white/70">{k.t}</p>
-              <p className="mt-4 text-xs text-white/40">Fuente: {k.src}.</p>
+              {k.src && <p className="mt-4 text-xs text-white/40">Fuente: {k.src}.</p>}
             </Reveal>
           ))}
         </div>
@@ -793,18 +799,21 @@ function Platform() {
     {
       icon: ShieldCheckIcon,
       title: "Cumplimiento de EPP, persona por persona",
-      body: "Casco, chaleco reflectivo, lentes, botas, protección auditiva y uniforme reglamentario. Estado por trabajador, no por cámara.",
-      chips: ["Casco", "Chaleco", "Lentes", "Botas", "Auditiva"],
+      status: "Disponible hoy",
+      body: "Casco, chaleco reflectivo, lentes, botas y guantes. Estado por trabajador, no por cámara.",
+      chips: ["Casco", "Chaleco", "Lentes", "Botas", "Guantes"],
     },
     {
       icon: TruckIcon,
       title: "Maquinaria y proximidad",
-      body: "Volquetes, excavadoras, cargadores y vehículos livianos. Alerta cuando una persona entra al radio de riesgo de un equipo en movimiento.",
-      chips: ["Volquete", "Excavadora", "Cargador", "Radio de riesgo"],
+      status: "Programa piloto",
+      body: "Volquetes, excavadoras, motoniveladoras y camionetas. La alerta por radio de riesgo de un equipo en movimiento está en desarrollo y se valida con el piloto.",
+      chips: ["Volquete", "Excavadora", "Motoniveladora", "Radio de riesgo"],
     },
     {
       icon: FileTextIcon,
       title: "Evidencia lista para auditoría",
+      status: "Disponible hoy",
       body: "Cada infracción queda registrada con frame, hora y zona. Reportes por turno, área o contratista, exportables.",
       chips: ["Frame y hora", "Por contratista", "Por turno", "Exportable"],
     },
@@ -826,7 +835,15 @@ function Platform() {
               <div className="grid h-12 w-12 place-items-center rounded-xl bg-[#272727] text-amber-signal">
                 <p.icon size={24} />
               </div>
-              <h3 className="mt-8 text-xl font-semibold text-white">{p.title}</h3>
+              <p
+                className={
+                  "text-eyebrow mt-8 " +
+                  (p.status === "Disponible hoy" ? "text-emerald-400" : "text-amber-signal")
+                }
+              >
+                {p.status}
+              </p>
+              <h3 className="mt-2 text-xl font-semibold text-white">{p.title}</h3>
               <p className="mt-3 text-sm text-white/60">{p.body}</p>
               <ul className="mt-6 flex flex-wrap gap-2">
                 {p.chips.map((c) => (
@@ -856,13 +873,13 @@ function HowItWorks() {
       icon: CpuIcon,
       n: "02",
       t: "La IA analiza cada frame",
-      d: "Modelos entrenados en faenas e instalaciones industriales reales. Procesamiento en el borde o en la nube, según su necesidad.",
+      d: "Modelos propios entrenados con imágenes de faenas e instalaciones industriales reales. Procesamiento en su infraestructura o en la nuestra, según su necesidad.",
     },
     {
       icon: BellRingingIcon,
       n: "03",
-      t: "Su equipo recibe alertas y reportes",
-      d: "Dashboard operacional, alertas en el momento y reporte ejecutivo por área, turno y contratista.",
+      t: "Su equipo recibe reportes y alertas",
+      d: "Reporte de cumplimiento por área, turno y contratista. El dashboard y las alertas en el momento llegan con el programa piloto.",
     },
   ];
   return (
@@ -870,7 +887,7 @@ function HowItWorks() {
       <div className="container-opsia">
         <SectionHead
           eyebrow="Cómo funciona"
-          title="De la cámara a la alerta, en menos de dos segundos."
+          title="De la cámara a la evidencia, sin obras en la faena."
         />
         <ol className="mt-16 grid gap-6 md:grid-cols-3">
           {steps.map((s, i) => (
@@ -896,8 +913,8 @@ function HowItWorks() {
           <LockKeyIcon size={24} className="mt-0.5 shrink-0 text-amber-signal" />
           <p className="text-sm text-white/70">
             <span className="font-semibold text-white">Privacidad por diseño.</span> Si lo requiere,
-            sus videos nunca salen de su infraestructura. Sin reconocimiento facial de identidad y
-            con difuminado de rostros configurable.
+            sus videos nunca salen de su infraestructura. Sin reconocimiento facial de identidad. El
+            difuminado de rostros en los reportes está en desarrollo.
           </p>
         </Reveal>
       </div>
@@ -912,7 +929,7 @@ function DashboardShowcase() {
     <section className="bg-black py-24">
       <div className="container-opsia">
         <SectionHead
-          eyebrow="Producto"
+          eyebrow="Producto · en desarrollo"
           title="El dashboard operacional."
           muted="Todo lo que ocurre, en una sola vista."
         />
@@ -923,7 +940,7 @@ function DashboardShowcase() {
               <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
               <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
               <p className="ml-4 flex-1 truncate rounded-md bg-black px-3 py-1 font-mono text-xs text-white/50">
-                app.opsia.ai/operaciones/mina-norte
+                opsia · operaciones / mina-norte
               </p>
             </div>
             <div className="grid gap-px bg-white/10 md:grid-cols-[220px_1fr_300px]">
@@ -997,7 +1014,7 @@ function DashboardShowcase() {
                 <div className="mt-8">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <p className="text-sm font-medium text-white">
-                      Tendencia semanal · Contratista Andes SA
+                      Tendencia semanal · Contratista A
                     </p>
                     <p className="text-2xl font-semibold text-white">
                       86% <span className="text-eyebrow align-middle text-white/40">EPP</span>
@@ -1074,7 +1091,10 @@ function DashboardShowcase() {
               </aside>
             </div>
           </div>
-          <p className="mt-4 text-xs text-white/40">Interfaz ilustrativa con datos de ejemplo.</p>
+          <p className="mt-4 text-xs text-white/40">
+            Interfaz en desarrollo, con datos de ejemplo. Hoy los hallazgos se entregan en el
+            reporte de auditoría.
+          </p>
         </Reveal>
       </div>
     </section>
@@ -1086,14 +1106,14 @@ function ServiceModel({ onCta }: { onCta: () => void }) {
   const tiers = [
     {
       name: "Auditoría",
-      tag: "Para empezar",
+      tag: "Disponible hoy",
       d: "Análisis de video grabado. Reporte de cumplimiento y hallazgos en 72 horas. Sin integración en tiempo real.",
       features: ["Análisis retrospectivo", "Reporte ejecutivo", "Recomendaciones priorizadas"],
       highlight: false,
     },
     {
       name: "Monitoreo continuo",
-      tag: "El más elegido",
+      tag: "Programa piloto",
       d: "Procesamiento en vivo, dashboard operacional y alertas en el momento para el equipo HSE.",
       features: [
         "Alertas en tiempo real",
@@ -1270,15 +1290,15 @@ const FAQ_ITEMS = [
   },
   {
     q: "¿Dónde se procesa el video?",
-    a: "En el borde, en su nube o en la nuestra. Muchas operaciones eligen procesamiento on premise para que el video nunca salga de su infraestructura.",
+    a: "En su infraestructura o en la nuestra. Si lo requiere, el procesamiento es on premise y el video nunca sale de su operación.",
   },
   {
     q: "¿Cuánto tarda la implementación?",
-    a: "Una auditoría entrega resultados en 72 horas. Un despliegue de monitoreo continuo por sitio suele tomar entre 2 y 6 semanas, según la cantidad de cámaras y reglas.",
+    a: "Una auditoría entrega resultados en 72 horas. Para monitoreo continuo estimamos entre 8 y 12 semanas por sitio, según la cantidad de cámaras y reglas. El plan concreto sale de la auditoría.",
   },
   {
     q: "¿Funciona en faenas remotas con poca conectividad?",
-    a: "Sí. El procesamiento puede correr en el borde, dentro de la faena, y sólo envía alertas y reportes. El video no necesita salir del sitio.",
+    a: "La auditoría no necesita conectividad: trabaja sobre video grabado. Para monitoreo continuo, el diseño procesa dentro de la faena y envía sólo alertas y reportes. Lo validamos en el piloto.",
   },
   {
     q: "¿Detecta el uniforme específico de mi empresa?",
@@ -1286,11 +1306,11 @@ const FAQ_ITEMS = [
   },
   {
     q: "¿Cómo manejan la privacidad de los trabajadores?",
-    a: "Aplicamos privacidad por diseño: sin reconocimiento facial de identidad, retención mínima de imágenes y difuminado de rostros configurable en los reportes.",
+    a: "Aplicamos privacidad por diseño: sin reconocimiento facial de identidad y con retención mínima de imágenes. El difuminado de rostros en los reportes está en desarrollo.",
   },
   {
     q: "¿Funciona de noche o con polvo, lluvia o niebla?",
-    a: "Los modelos están entrenados en condiciones adversas de faena. Recomendamos una iluminación mínima adecuada; en condiciones extremas ajustamos umbrales y calibración por cámara.",
+    a: "Depende de la iluminación, el ángulo y la cámara. Por eso empezamos con una auditoría sobre su propio video: ahí medimos qué cámaras rinden y cuáles no, antes de cualquier compromiso.",
   },
   {
     q: "¿Qué pasa después de la primera llamada?",
