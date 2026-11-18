@@ -502,11 +502,10 @@ function buildScenes(onCta: () => void): WorldScene[] {
       iw: 1920,
       ih: 1200,
       focus: [0.5, 0.5],
-      to: [0.4, 0.72],
+      to: [0.62, 0.5],
       zoom: 1.3,
       weight: 1.3,
       detections: [
-        { x: 26.5, y: 83.5, w: 6.5, h: 10.5, label: "Vehículo · ruta 2", tone: "info" },
         { x: 73.5, y: 47.5, w: 4, h: 5, label: "Vehículo", tone: "info" },
       ],
       caption: ILLUSTRATIVE,
