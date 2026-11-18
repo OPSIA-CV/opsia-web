@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <title>OPSIA · formulario de contacto</title>
+  </head>
+  <body>
+    <!--
+      Netlify detecta formularios sólo en HTML estático del deploy. La landing se renderiza
+      en la función SSR, así que el formulario se declara acá y el ContactModal postea a
+      esta ruta con fetch. Los campos tienen que coincidir con los del modal.
+    -->
+    <form name="contacto" data-netlify="true" netlify-honeypot="bot-field" hidden>
+      <input type="hidden" name="form-name" value="contacto" />
+      <input name="bot-field" />
+      <input name="intent" />
+      <input name="name" />
+      <input name="company" />
+      <input name="industry" />
+      <input name="email" />
+      <textarea name="message"></textarea>
+    </form>
+  </body>
+</html>
