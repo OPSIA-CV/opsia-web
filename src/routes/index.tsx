@@ -34,6 +34,18 @@ export const Route = createFileRoute("/")({
 
 const CONTACT_EMAIL = "opsia.cv@gmail.com";
 const CTA_LABEL = "Agendar demo de 30 minutos";
+/** Link de agenda (Cal.com, Google Calendar…). Vacío: no se muestra el botón después del envío. */
+const SCHEDULING_URL = "";
+
+/** Envía el lead a Netlify Forms. El formulario se declara en public/__forms.html. */
+async function sendLead(data: Record<string, string>) {
+  const res = await fetch("/__forms.html", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ "form-name": "contacto", ...data }).toString(),
+  });
+  if (!res.ok) throw new Error(`Netlify Forms respondió ${res.status}`);
+}
 
 // ---------- Reveal: fade up pesado al entrar en viewport (IntersectionObserver) ----------
 function Reveal({
@@ -137,11 +149,12 @@ function ContactModal({
   onClose: () => void;
   intent?: string;
 }) {
-  const [sent, setSent] = useState(false);
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [fallbackHref, setFallbackHref] = useState(`mailto:${CONTACT_EMAIL}`);
   const [errors, setErrors] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!open) return;
-    setSent(false);
+    setStatus("idle");
     setErrors({});
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
@@ -153,8 +166,9 @@ function ContactModal({
   }, [open, onClose]);
   if (!open) return null;
 
-  const submit = (e: FormEvent<HTMLFormElement>) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (status === "sending") return;
     const fd = new FormData(e.currentTarget);
     const next: Record<string, string> = {};
     if (!String(fd.get("name") ?? "").trim()) next.name = "Ingrese su nombre.";
@@ -173,8 +187,25 @@ function ContactModal({
       `Operación: ${fd.get("industry")}\n` +
       `Email: ${email}\n\n` +
       `${fd.get("message") ?? ""}`;
-    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    setSent(true);
+    setFallbackHref(
+      `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+    );
+    setStatus("sending");
+    try {
+      await sendLead({
+        "bot-field": String(fd.get("bot-field") ?? ""),
+        intent: intent === "audit" ? "Auditoría piloto" : "Demo",
+        name: String(fd.get("name") ?? "").trim(),
+        company: String(fd.get("company") ?? "").trim(),
+        industry: String(fd.get("industry") ?? ""),
+        email,
+        message: String(fd.get("message") ?? "").trim(),
+      });
+      setStatus("sent");
+    } catch (err) {
+      console.error(err);
+      setStatus("error");
+    }
   };
 
   return (
@@ -204,29 +235,40 @@ function ContactModal({
             <XIcon size={18} />
           </button>
         </div>
-        {sent ? (
-          <div className="px-6 py-10 text-center">
+        {status === "sent" ? (
+          <div className="px-6 py-10 text-center" role="status">
             <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-amber-signal/20 text-amber-signal">
               <CheckIcon size={20} weight="bold" />
             </div>
-            <p className="mt-4 text-lg font-semibold">Su correo quedó listo para enviar.</p>
+            <p className="mt-4 text-lg font-semibold">Recibimos su solicitud.</p>
             <p className="mt-2 text-sm text-white/60">
-              Se abrió su cliente de correo con el mensaje preparado. Solo falta enviarlo. Si no se
-              abrió, escríbanos a{" "}
-              <a
-                href={`mailto:${CONTACT_EMAIL}`}
-                className="font-medium text-white underline underline-offset-4"
-              >
-                {CONTACT_EMAIL}
-              </a>
-              . Respondemos en menos de 24 horas hábiles.
+              Le respondemos por correo en menos de 24 horas hábiles.
+              {SCHEDULING_URL && " Si prefiere, ya puede elegir un horario para la llamada."}
             </p>
-            <button onClick={onClose} className="btn-secondary mt-6">
-              Cerrar
-            </button>
+            <div className="mt-6 flex flex-col items-center gap-3">
+              {SCHEDULING_URL && (
+                <a
+                  href={SCHEDULING_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary"
+                >
+                  Elegir horario
+                  <ArrowRightIcon size={16} weight="bold" />
+                </a>
+              )}
+              <button onClick={onClose} className="btn-secondary">
+                Cerrar
+              </button>
+            </div>
           </div>
         ) : (
           <form className="grid gap-4 px-6 py-6" onSubmit={submit} noValidate>
+            <p className="hidden" aria-hidden="true">
+              <label>
+                No completar: <input name="bot-field" tabIndex={-1} autoComplete="off" />
+              </label>
+            </p>
             <Field label="Nombre" name="name" error={errors.name} autoComplete="name" />
             <Field
               label="Empresa"
@@ -278,13 +320,31 @@ function ContactModal({
                 placeholder="Cuéntenos sobre su operación, cantidad de cámaras y objetivos."
               />
             </div>
-            <button type="submit" className="btn-primary mt-2">
-              Preparar solicitud
+            {status === "error" && (
+              <p
+                role="alert"
+                className="rounded-lg border border-red-400/40 p-3 text-sm text-red-300"
+              >
+                No pudimos enviar la solicitud. Puede{" "}
+                <a
+                  href={fallbackHref}
+                  className="font-medium text-white underline underline-offset-4"
+                >
+                  mandarla por correo con los datos ya cargados
+                </a>
+                .
+              </p>
+            )}
+            <button
+              type="submit"
+              className="btn-primary mt-2 disabled:opacity-60"
+              disabled={status === "sending"}
+            >
+              {status === "sending" ? "Enviando…" : "Enviar solicitud"}
               <ArrowRightIcon size={16} weight="bold" />
             </button>
             <p className="text-xs text-white/50">
-              Al enviar se abre su cliente de correo con el mensaje listo. También puede escribirnos
-              a{" "}
+              Usamos sus datos sólo para responderle. También puede escribirnos a{" "}
               <a
                 href={`mailto:${CONTACT_EMAIL}`}
                 className="font-medium text-white underline underline-offset-4"
