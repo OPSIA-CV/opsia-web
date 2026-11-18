@@ -505,9 +505,7 @@ function buildScenes(onCta: () => void): WorldScene[] {
       to: [0.62, 0.5],
       zoom: 1.3,
       weight: 1.3,
-      detections: [
-        { x: 73.5, y: 47.5, w: 4, h: 5, label: "Vehículo", tone: "info" },
-      ],
+      detections: [{ x: 73.5, y: 47.5, w: 4, h: 5, label: "Vehículo", tone: "info" }],
       caption: ILLUSTRATIVE,
       copy: (
         <div className="max-w-[680px]">
