@@ -35,6 +35,8 @@ export type WorldScene = {
   weight?: number;
   detections?: Detection[];
   caption?: string;
+  /** lado del texto en desktop, para no tapar el sujeto de la imagen */
+  side?: "left" | "right";
   copy: ReactNode;
 };
 
@@ -171,17 +173,18 @@ export function ScrollWorld({ scenes }: { scenes: WorldScene[] }) {
         let op = 1;
         let blur = 0;
         if (p < 0) {
-          // llegando desde la profundidad
+          // llegando desde la profundidad: queda opaca debajo de la saliente antes de que
+          // ésta se vaya, así la pantalla nunca cae a negro entre escenas
           const q = clamp((p + T) / T);
-          s = 1 + 0.32 * (1 - easeOut(q));
-          op = smooth(q);
-          blur = (1 - q) * 10;
+          s = 1 + 0.18 * (1 - easeOut(q));
+          op = smooth(q * 1.8);
+          blur = (1 - q) * 6;
         } else if (!last && p > 1 - T) {
           // la cámara atraviesa la escena
           const q = clamp((p - (1 - T)) / T);
-          s = z * (1 + 1.6 * easeIn(q));
-          op = 1 - smooth((q - 0.15) / 0.85);
-          blur = q * 14;
+          s = z * (1 + 0.55 * easeIn(q));
+          op = 1 - smooth((q - 0.3) / 0.7);
+          blur = q * 8;
           const sw = Math.sin(Math.PI * q);
           if (sw > switching) {
             switching = sw;
@@ -205,6 +208,7 @@ export function ScrollWorld({ scenes }: { scenes: WorldScene[] }) {
       const a = clamp(Math.floor(t + T * 0.5), 0, N - 1);
       if (a !== active) {
         active = a;
+        stage!.dataset.side = scenes[a].side ?? "left";
         copyRefs.current.forEach((c, k) => c?.classList.toggle("is-active", k === a));
         layerRefs.current.forEach((l, k) => l?.classList.toggle("is-active", k === a));
         dotRefs.current.forEach((d, k) => {
@@ -408,7 +412,12 @@ export function ScrollWorld({ scenes }: { scenes: WorldScene[] }) {
               ref={(el) => {
                 copyRefs.current[i] = el;
               }}
-              className="sw-copy absolute inset-x-0 bottom-0 px-8 pb-20 md:top-1/2 md:bottom-auto md:-translate-y-1/2 md:px-20 md:pb-0"
+              className={
+                "sw-copy absolute inset-x-0 bottom-0 px-8 pb-20 md:top-1/2 md:bottom-auto md:-translate-y-1/2 md:pb-0 " +
+                (s.side === "right"
+                  ? "md:left-auto md:w-[44rem] md:max-w-[55%] md:pr-28"
+                  : "md:px-20")
+              }
             >
               {s.copy}
               {s.caption && <p className="sw-fade mt-4 text-xs text-white/50">{s.caption}</p>}

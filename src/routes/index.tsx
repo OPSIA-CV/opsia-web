@@ -501,9 +501,9 @@ function buildScenes(onCta: () => void): WorldScene[] {
       imgSm: `${W}/01-rajo-sm.webp`,
       iw: 1920,
       ih: 1200,
-      focus: [0.5, 0.55],
-      to: [0.56, 0.8],
-      zoom: 1.45,
+      focus: [0.5, 0.5],
+      to: [0.4, 0.72],
+      zoom: 1.3,
       weight: 1.3,
       detections: [
         { x: 26.5, y: 83.5, w: 6.5, h: 10.5, label: "Vehículo · ruta 2", tone: "info" },
@@ -572,18 +572,18 @@ function buildScenes(onCta: () => void): WorldScene[] {
     {
       id: "epp",
       label: "EPP en faena",
+      side: "right",
       img: `${W}/03-mineria.webp`,
       imgSm: `${W}/03-mineria-sm.webp`,
       iw: 1200,
       ih: 900,
-      focus: [0.55, 0.45],
-      to: [0.4, 0.3],
-      zoom: 1.3,
+      focus: [0.4, 0.38],
+      to: [0.34, 0.38],
+      zoom: 1.08,
       caption: ILLUSTRATIVE,
       detections: [
         { x: 20, y: 15, w: 27.5, h: 20.5, label: "Casco ✓", tone: "ok" },
         { x: 4, y: 55, w: 45, h: 44, label: "Chaleco ✓", tone: "ok" },
-        { x: 49, y: 30, w: 27, h: 47, label: "Maquinaria en movimiento", tone: "warn" },
       ],
       copy: (
         <SceneCopy
@@ -626,9 +626,9 @@ function buildScenes(onCta: () => void): WorldScene[] {
       imgSm: `${W}/01-rajo-sm.webp`,
       iw: 1920,
       ih: 1200,
-      focus: [0.5, 0.35],
-      to: [0.5, 0.25],
-      zoom: 1.1,
+      focus: [0.5, 0.45],
+      to: [0.5, 0.38],
+      zoom: 1.08,
       weight: 1.3,
       copy: (
         <div className="max-w-xl">
@@ -923,6 +923,69 @@ function HowItWorks() {
 }
 
 // ---------- Producto: dashboard ----------
+/** Miniaturas recortadas de los stills del recorrido. Datos de ejemplo. */
+const ALERTS: {
+  t: string;
+  z: string;
+  m: string;
+  warn: boolean;
+  img: string;
+  size: string;
+  pos: string;
+  box: [number, number, number, number];
+}[] = [
+  {
+    t: "09:41",
+    z: "Rajo A · CAM 07",
+    m: "Trabajador sin chaleco reflectivo",
+    warn: true,
+    img: "/world/06-equipo-sm.webp",
+    size: "260%",
+    pos: "88% 30%",
+    box: [28, 8, 46, 92],
+  },
+  {
+    t: "09:38",
+    z: "Chancado · CAM 03",
+    m: "Persona a 3,1 m de un volquete",
+    warn: true,
+    img: "/world/06-equipo-sm.webp",
+    size: "150%",
+    pos: "15% 35%",
+    box: [8, 14, 34, 86],
+  },
+  {
+    t: "09:34",
+    z: "Accesos · CAM 01",
+    m: "Vehículo en zona restringida",
+    warn: true,
+    img: "/world/01-rajo-sm.webp",
+    size: "520%",
+    pos: "31% 89%",
+    box: [30, 22, 40, 56],
+  },
+  {
+    t: "09:28",
+    z: "Talleres · CAM 09",
+    m: "EPP completo confirmado",
+    warn: false,
+    img: "/world/03-mineria-sm.webp",
+    size: "190%",
+    pos: "18% 25%",
+    box: [18, 6, 56, 90],
+  },
+  {
+    t: "09:22",
+    z: "Rajo A · CAM 05",
+    m: "Persona en radio de maquinaria",
+    warn: true,
+    img: "/world/03-mineria-sm.webp",
+    size: "150%",
+    pos: "60% 60%",
+    box: [6, 10, 50, 88],
+  },
+];
+
 function DashboardShowcase() {
   const ok = "oklch(0.72 0.15 155)";
   return (
@@ -1044,37 +1107,23 @@ function DashboardShowcase() {
                   <span className="text-xs text-white/50">últimos 15 min</span>
                 </div>
                 <ul className="mt-4 grid gap-3">
-                  {[
-                    {
-                      t: "09:41",
-                      z: "Rajo A · CAM 07",
-                      m: "Trabajador sin chaleco reflectivo",
-                      warn: true,
-                    },
-                    {
-                      t: "09:38",
-                      z: "Chancado · CAM 03",
-                      m: "Persona a 3,1 m de un volquete",
-                      warn: true,
-                    },
-                    { t: "09:34", z: "Accesos · CAM 01", m: "Vehículo no autorizado", warn: true },
-                    {
-                      t: "09:28",
-                      z: "Talleres · CAM 09",
-                      m: "EPP completo confirmado",
-                      warn: false,
-                    },
-                    { t: "09:22", z: "Rajo A · CAM 05", m: "Casco no detectado", warn: true },
-                  ].map((a) => (
-                    <li key={a.t} className="flex gap-3 rounded-lg bg-black p-2">
-                      <div className="relative h-10 w-14 shrink-0 overflow-hidden rounded-md bg-[#272727]">
+                  {ALERTS.map((a) => (
+                    <li key={a.t} className="flex items-center gap-3 rounded-lg bg-black p-2">
+                      <div
+                        className="relative h-11 w-16 shrink-0 overflow-hidden rounded-md bg-[#272727] bg-no-repeat"
+                        style={{
+                          backgroundImage: `url(${a.img})`,
+                          backgroundSize: a.size,
+                          backgroundPosition: a.pos,
+                        }}
+                      >
                         <span
-                          className="absolute border"
+                          className="absolute rounded-[2px] border"
                           style={{
-                            top: "18%",
-                            left: a.warn ? "30%" : "22%",
-                            width: "38%",
-                            height: "64%",
+                            left: `${a.box[0]}%`,
+                            top: `${a.box[1]}%`,
+                            width: `${a.box[2]}%`,
+                            height: `${a.box[3]}%`,
                             borderColor: a.warn ? "var(--amber-signal)" : ok,
                           }}
                         />
